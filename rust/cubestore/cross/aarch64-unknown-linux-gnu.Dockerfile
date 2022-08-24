@@ -1,4 +1,4 @@
-# Based on top of ubuntu 16.04
+# Based on top of ubuntu 20.04
 # https://github.com/rust-embedded/cross/blob/master/docker/Dockerfile.aarch64-unknown-linux-gnu
 FROM rustembedded/cross:aarch64-unknown-linux-gnu
 
@@ -6,20 +6,20 @@ RUN apt-get update \
     && apt-get -y upgrade \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common pkg-config wget apt-transport-https ca-certificates \
     && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
-    && add-apt-repository "deb https://apt.llvm.org/xenial/ llvm-toolchain-xenial-12 main"  \
+    && add-apt-repository "deb https://apt.llvm.org/focal/ llvm-toolchain-focal-14 main"  \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-multilib g++-multilib \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y llvm-12 clang-12 libclang-12-dev clang-12 make \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y llvm-14 clang-14 libclang-14-dev clang-14 make \
         libc6 libc6-dev libc6-arm64-cross libc6-dev-arm64-cross \
         gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*;
 
-RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-12 100
-RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-12 100
-RUN update-alternatives --install /usr/bin/clang-cpp clang-cpp /usr/bin/clang-cpp-12 100
+RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100
+RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100
+RUN update-alternatives --install /usr/bin/clang-cpp clang-cpp /usr/bin/clang-cpp-14 100
 
 # https://www.openssl.org/source/old/1.1.1/
-ARG OPENSSL_VERSION=1.1.1l
+ARG OPENSSL_VERSION=1.1.1p
 
 ENV MACHINE=armv8
 ENV ARCH=arm

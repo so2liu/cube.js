@@ -343,6 +343,144 @@ curl \
  http://localhost:4000/cubejs-api/v1/run-scheduled-refresh
 ```
 
+### <--{"id" : "API Reference"}--> /cubejs-system/v1/pre-aggregations/jobs
+
+Submit pre-aggregation build jobs and retrieve their refresh status.
+
+#### Submitting a job
+
+| Parameter                  | Description                                                        | Required |
+| -------------------------- | ------------------------------------------------------------------ | -------- |
+| `action`                   | Submitting a job requires using the `post` action                  | ✅       |
+| `selector.contexts`        | An array of contexts to use                                        | ✅       |
+| `selector.timezones`       | An array of timezones to use                                       | ❌       |
+| `selector.datasources`     | An array of data source names of the pre-aggregation to build      | ✅       |
+| `selector.cubes`           | An array of cube names which contain the pre-aggregations to build | ✅       |
+| `selector.preAggregations` | An array of pre-aggregation names to build                         | ✅       |
+
+To submit a job, send a `POST` request with a payload including the `action` and
+`selector` properties. The response will include the `jobId` of the submitted
+job.
+
+Example request:
+
+```json
+{
+  "action": "post",
+  "selector": {
+    "contexts": [
+      { "securityContext": { "tenant": "t1" } },
+      { "securityContext": { "tenant": "t2" } }
+    ],
+    "timezones": ["UTC", "America/Los_Angeles"],
+    "datasources": ["default"],
+    "cubes": ["ECommerce"],
+    "preAggregations": ["ECommerce.manual"]
+  }
+}
+```
+
+Example response:
+
+```json
+[
+  "61adcaf340a3b9163bfd2c14fc8f9e46",
+  "5bdc6b3276e350bc71622c2853930b09",
+  "26229dc2f08776779f7eb75860aa59d8",
+  "0397965b5134761805f9fe2bdcbe8378",
+	<...>
+]
+```
+
+#### Retrieving statuses for a job
+
+| Parameter | Description                                                                              | Required |
+| --------- | ---------------------------------------------------------------------------------------- | -------- |
+| `action`  | Retrieving a job requires using the `get` action                                         | ✅       |
+| `resType` | If `object` is specified, the response is returned as an JSON object instead of an array | ❌       |
+| `tokens`  | An array of strings representing pre-aggregation build jobs                              | ✅       |
+
+To retrieve the status of a previously submitted job, send a `POST` request with
+a `tokens` property.
+
+Example request:
+
+```json
+{
+  "action": "get",
+  "tokens": [
+    "61adcaf340a3b9163bfd2c14fc8f9e46",
+    "5bdc6b3276e350bc71622c2853930b09",
+    "26229dc2f08776779f7eb75860aa59d8",
+    "0397965b5134761805f9fe2bdcbe8378"
+  ]
+}
+```
+
+Example response:
+
+```json
+[
+  {
+    "token": "61adcaf340a3b9163bfd2c14fc8f9e46",
+    "table": "preaggs.e_commerce_manual20200101_mi3klvgn_ncgxadnq_1hkim0d",
+    "status": "missing_partition",
+    "selector": {
+      "cubes": ["ECommerce"],
+      "preAggregations": ["ECommerce.manual"],
+      "contexts": [
+        {
+          "securityContext": {
+            "tenant": "t1"
+          }
+        }
+      ],
+      "timezones": ["UTC"],
+      "dataSources": ["default"]
+    }
+  }
+]
+```
+
+Example request with `resType: object`:
+
+```json
+{
+  "action": "get",
+  "resType": "object",
+  "tokens": [
+    "61adcaf340a3b9163bfd2c14fc8f9e46",
+    "5bdc6b3276e350bc71622c2853930b09",
+    "26229dc2f08776779f7eb75860aa59d8",
+    "0397965b5134761805f9fe2bdcbe8378"
+  ]
+}
+```
+
+Example response with `resType: object`:
+
+```json
+{
+  "8ec7e3d92d7ea7363664e0ffb2b6aab4": {
+    "table": "preaggs.e_commerce_manual20200801_umv4mb1x_wizagr00_1hkim0d",
+    "status": "done",
+    "selector": {
+      "cubes": ["ECommerce"],
+      "preAggregations": ["ECommerce.manual"],
+      "contexts": [
+        {
+          "securityContext": {
+            "tenant": "t1"
+          }
+        }
+      ],
+      "timezones": ["America/Los_Angeles"],
+      "dataSources": ["default"]
+    }
+  }
+}
+```
+
 ### <--{"id" : "API Reference"}--> /readyz
 
 Returns the ready state of the deployment.

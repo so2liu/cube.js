@@ -14,13 +14,17 @@ import {
   utcToLocalTimeZone,
 } from '@cubejs-backend/shared';
 
-import { cancelCombinator, SaveCancelFn, DriverInterface, BaseDriver,
+import {
+  cancelCombinator,
+  SaveCancelFn,
+  DriverInterface,
+  BaseDriver,
   DownloadTableData,
   InlineTable,
   StreamOptions,
-  UnloadOptions, CacheDriverInterface, DriverCapabilities } from '@cubejs-backend/base-driver';
-import { RedisCacheDriver } from './RedisCacheDriver';
-import { LocalCacheDriver } from './LocalCacheDriver';
+  UnloadOptions,
+  DriverCapabilities
+} from '@cubejs-backend/base-driver';
 import { Query, QueryCache, QueryTuple, QueryWithParams } from './QueryCache';
 import { ContinueWaitError } from './ContinueWaitError';
 import { DriverFactory, DriverFactoryByDataSource } from './DriverFactory';
@@ -235,14 +239,12 @@ class PreAggregationLoadCache {
 
   private driverFactory: DriverFactory;
 
-  private queryCache: any;
+  private queryCache: QueryCache;
 
   // eslint-disable-next-line no-use-before-define
   private preAggregations: PreAggregations;
 
   private queryResults: any;
-
-  private cacheDriver: CacheDriverInterface;
 
   private externalDriverFactory: any;
 
@@ -274,7 +276,6 @@ class PreAggregationLoadCache {
     this.queryCache = queryCache;
     this.preAggregations = preAggregations;
     this.queryResults = {};
-    this.cacheDriver = preAggregations.cacheDriver;
     this.externalDriverFactory = preAggregations.externalDriverFactory;
     this.requestId = options.requestId;
     this.tablePrefixes = options.tablePrefixes;
@@ -283,7 +284,7 @@ class PreAggregationLoadCache {
   }
 
   protected async tablesFromCache(preAggregation, forceRenew?) {
-    let tables = forceRenew ? null : await this.cacheDriver.get(this.tablesRedisKey(preAggregation));
+    let tables = forceRenew ? null : await this.queryCache.getCacheDriver().get(this.tablesRedisKey(preAggregation));
     if (!tables) {
       tables = await this.preAggregations.getLoadCacheQueue(this.dataSource).executeInQueue(
         'query',
@@ -304,7 +305,7 @@ class PreAggregationLoadCache {
     }
 
     const newTables = await this.fetchTablesNoCache(preAggregation);
-    await this.cacheDriver.set(
+    await this.queryCache.getCacheDriver().set(
       this.tablesRedisKey(preAggregation),
       newTables,
       this.preAggregations.options.preAggregationsSchemaCacheExpire || 60 * 60
@@ -545,7 +546,7 @@ export class PreAggregationLoader {
         refreshKeyValues,
         queryKey: this.isJob
           // We need to return a queryKey value for the jobed build query
-          // (initialized by the /cubejs-system/v1/pre-aggregations/jobs 
+          // (initialized by the /cubejs-system/v1/pre-aggregations/jobs
           // endpoint) as a part of the response to make it possible to get a
           // query result from the cache by the other API call.
           ? this.preAggregationQueryKey(refreshKeyValues)
@@ -1764,8 +1765,6 @@ type PreAggregationsOptions = {
 export class PreAggregations {
   public options: PreAggregationsOptions;
 
-  private cacheDriver: CacheDriverInterface;
-
   public externalDriverFactory: DriverFactory;
 
   public structureVersionPersistTime: any;
@@ -1789,10 +1788,6 @@ export class PreAggregations {
   ) {
     this.options = options || {};
 
-    this.cacheDriver = options.cacheAndQueueDriver === 'redis' ?
-      new RedisCacheDriver({ pool: options.redisPool }) :
-      new LocalCacheDriver();
-
     this.externalDriverFactory = options.externalDriverFactory;
     this.structureVersionPersistTime = options.structureVersionPersistTime || 60 * 60 * 24 * 30;
     this.usedTablePersistTime = options.usedTablePersistTime || getEnv('dbQueryTimeout');
@@ -1806,11 +1801,11 @@ export class PreAggregations {
   }
 
   public async addTableUsed(tableName) {
-    return this.cacheDriver.set(this.tablesUsedRedisKey(tableName), true, this.usedTablePersistTime);
+    return this.queryCache.getCacheDriver().set(this.tablesUsedRedisKey(tableName), true, this.usedTablePersistTime);
   }
 
   public async tablesUsed() {
-    return (await this.cacheDriver.keysStartingWith(this.tablesUsedRedisKey('')))
+    return (await this.queryCache.getCacheDriver().keysStartingWith(this.tablesUsedRedisKey('')))
       .map(k => k.replace(this.tablesUsedRedisKey(''), ''));
   }
 

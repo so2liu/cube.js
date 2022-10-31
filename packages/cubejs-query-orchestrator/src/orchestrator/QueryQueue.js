@@ -1,5 +1,6 @@
 import R from 'ramda';
 import { getEnv } from '@cubejs-backend/shared';
+import { CubeStoreQueueDriver } from '@cubejs-backend/cubestore-driver';
 
 import { TimeoutError } from './TimeoutError';
 import { ContinueWaitError } from './ContinueWaitError';
@@ -36,7 +37,7 @@ export class QueryQueue {
         this.queueDriver = new LocalQueueDriver(queueDriverOptions);
         break;
       case 'cubestore':
-        this.queueDriver = new LocalQueueDriver(queueDriverOptions);
+        this.queueDriver = new CubeStoreQueueDriver(queueDriverOptions);
         break;
       default:
         throw new Error(`Unknown queue driver: ${options.cacheAndQueueDriver}`);

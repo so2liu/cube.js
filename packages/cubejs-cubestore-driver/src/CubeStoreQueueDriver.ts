@@ -21,35 +21,65 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     protected readonly driver: CubeStoreDriver
   ) {}
 
-  public async addToQueue(keyScore: number, queryKey: any[], orphanedTime: any, queryHandler: string, query: AddToQueueQuery, priority: number, options: AddToQueueOptions): Promise<unknown> {
-    console.log('addtoQueue', {
+  public async addToQueue(keyScore: number, queryKey: string, orphanedTime: any, queryHandler: string, query: AddToQueueQuery, priority: number, options: AddToQueueOptions): Promise<unknown> {
+    console.log('addtoQueue ..', {
       keyScore, queryKey, orphanedTime, queryHandler, query, priority, options
     });
 
-    throw new Error('Unimplemented addToQueue');
+    // throw new Error('Unimplemented addToQueue');
+
+    const data = {
+      queryHandler,
+      query,
+      queryKey,
+      stageQueryKey: options.stageQueryKey,
+      priority,
+      requestId: options.requestId,
+      addedToQueueTime: new Date().getTime()
+    };
+
+    console.log('addtoQueue data', data);
+
+    const rows = await this.driver.query(`QUEUE ADD PRIORITY "${queryKey}"`, []);
+
+    return [
+      1,
+      null,
+      null,
+      1,
+      data.addedToQueueTime
+    ];
   }
 
-  cancelQuery(queryKey: string): Promise<unknown> {
+  public async getQueryAndRemove(queryKey: string): Promise<unknown> {
+    throw new Error('Unimplemented getQueryAndRemove');
+  }
+
+  public async cancelQuery(queryKey: string): Promise<unknown> {
     throw new Error('Unimplemented cancelQuery');
   }
 
-  freeProcessingLock(queryKe: string, processingId: string, activated: unknown): Promise<unknown> {
+  public async freeProcessingLock(queryKe: string, processingId: string, activated: unknown): Promise<unknown> {
     throw new Error('Unimplemented freeProcessingLock');
   }
 
-  getActiveQueries(): Promise<unknown> {
+  public async getActiveQueries(): Promise<unknown> {
     throw new Error('Unimplemented getActiveQueries');
   }
 
-  getNextProcessingId(): Promise<string> {
+  public async getNextProcessingId(): Promise<string> {
     throw new Error('Unimplemented getNextProcessingId');
   }
 
-  getOrphanedQueries(): Promise<unknown> {
-    throw new Error('Unimplemented getOrphanedQueries');
+  public async getOrphanedQueries(): Promise<unknown> {
+    // throw new Error('Unimplemented getOrphanedQueries');
+
+    console.log('getOrphanedQueries');
+
+    return [];
   }
 
-  getQueryStageState(onlyKeys: boolean): Promise<QueryStageStateResponse> {
+  public async getQueryStageState(onlyKeys: boolean): Promise<QueryStageStateResponse> {
     console.log(onlyKeys);
     // throw new Error(`Unimplemented getQueryStageState, onlyKeys: ${onlyKeys}`);
 
@@ -62,35 +92,39 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     return null;
   }
 
-  getResultBlocking(queryKey: string): Promise<unknown> {
+  public async getResultBlocking(queryKey: string): Promise<unknown> {
     throw new Error(`Unimplemented getResultBlocking, queryKey: ${queryKey}`);
   }
 
-  getStalledQueries(): Promise<unknown> {
-    throw new Error('Unimplemented getStalledQueries');
+  public async getStalledQueries(): Promise<unknown> {
+    // throw new Error('Unimplemented getStalledQueries');
+
+    console.log('getStalledQueries');
+
+    return [];
   }
 
-  getToProcessQueries(): Promise<unknown> {
+  public async getToProcessQueries(): Promise<unknown> {
     throw new Error('Unimplemented getToProcessQueries');
   }
 
-  optimisticQueryUpdate(queryKey: any, toUpdate: any, processingId: any): Promise<unknown> {
+  public async optimisticQueryUpdate(queryKey: any, toUpdate: any, processingId: any): Promise<unknown> {
     throw new Error('Unimplemented optimisticQueryUpdate');
   }
 
-  release(): Promise<void> {
-    throw new Error('Unimplemented release');
+  public async release(): Promise<void> {
+    // throw new Error('Unimplemented release');
   }
 
-  retrieveForProcessing(queryKey: string, processingId: string): Promise<unknown> {
+  public async retrieveForProcessing(queryKey: string, processingId: string): Promise<unknown> {
     throw new Error('Unimplemented retrieveForProcessing');
   }
 
-  setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<unknown> {
+  public async setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<unknown> {
     throw new Error('Unimplemented setResultAndRemoveQuery');
   }
 
-  updateHeartBeat(queryKey: string): Promise<void> {
+  public async updateHeartBeat(queryKey: string): Promise<void> {
     throw new Error('Unimplemented updateHeartBeat');
   }
 }

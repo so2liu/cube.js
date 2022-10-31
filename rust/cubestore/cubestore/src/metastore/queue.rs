@@ -3,15 +3,21 @@ use super::{
     RocksSecondaryIndex, RocksTable, TableId,
 };
 use crate::{base_rocks_secondary_index, rocks_table_impl};
+use chrono::Utc;
 
 use crate::metastore::QueueItemStatus;
-use regex::internal::Input;
 use rocksdb::DB;
 use serde::{Deserialize, Deserializer};
 
 impl QueueItem {
-    pub fn new(key: String, status: QueueItemStatus) -> Self {
-        QueueItem { key, status }
+    pub fn new(key: String, status: QueueItemStatus, priority: u64) -> Self {
+        QueueItem {
+            key,
+            status,
+            priority,
+            created: Utc::now(),
+            heartbeat: None,
+        }
     }
 
     pub fn get_key(&self) -> &String {
@@ -63,7 +69,11 @@ impl RocksSecondaryIndex<QueueItem, QueueItemIndexKey> for QueueItemRocksIndex {
             QueueItemIndexKey::ByKey(s) => s.as_bytes().to_vec(),
             QueueItemIndexKey::ByStatus(s) => {
                 let mut r = Vec::with_capacity(1);
-                r.push(1_u8);
+
+                match s {
+                    QueueItemStatus::Pending => r.push(0_u8),
+                    QueueItemStatus::Active => r.push(1_u8),
+                }
 
                 r
             }

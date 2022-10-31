@@ -1,5 +1,6 @@
 import R from 'ramda';
 import { getEnv } from '@cubejs-backend/shared';
+import { QueueDriverInterface } from '@cubejs-backend/base-driver';
 import { CubeStoreQueueDriver } from '@cubejs-backend/cubestore-driver';
 
 import { TimeoutError } from './TimeoutError';
@@ -7,6 +8,27 @@ import { ContinueWaitError } from './ContinueWaitError';
 import { RedisQueueDriver } from './RedisQueueDriver';
 import { LocalQueueDriver } from './LocalQueueDriver';
 
+/**
+ * @param cacheAndQueueDriver
+ * @param queueDriverOptions
+ * @returns {QueueDriverInterface}
+ */
+function factoryQueueDriver(cacheAndQueueDriver, queueDriverOptions) {
+  switch (cacheAndQueueDriver || 'memory') {
+    case 'redis':
+      return new RedisQueueDriver(queueDriverOptions);
+    case 'memory':
+      return new LocalQueueDriver(queueDriverOptions);
+    case 'cubestore':
+      return new CubeStoreQueueDriver(queueDriverOptions);
+    default:
+      throw new Error(`Unknown queue driver: ${cacheAndQueueDriver}`);
+  }
+}
+
+/**
+ * @property {QueueDriverInterface} queueDriver
+ */
 export class QueryQueue {
   constructor(redisQueuePrefix, options) {
     this.redisQueuePrefix = redisQueuePrefix;
@@ -29,20 +51,8 @@ export class QueryQueue {
       redisPool: options.redisPool,
       getQueueEventsBus: options.getQueueEventsBus
     };
-    switch (options.cacheAndQueueDriver || 'memory') {
-      case 'redis':
-        this.queueDriver = new RedisQueueDriver(queueDriverOptions);
-        break;
-      case 'memory':
-        this.queueDriver = new LocalQueueDriver(queueDriverOptions);
-        break;
-      case 'cubestore':
-        this.queueDriver = new CubeStoreQueueDriver(queueDriverOptions);
-        break;
-      default:
-        throw new Error(`Unknown queue driver: ${options.cacheAndQueueDriver}`);
-    }
 
+    this.queueDriver = factoryQueueDriver(options.cacheAndQueueDriver, queueDriverOptions);
     this.skipQueue = options.skipQueue;
   }
 

@@ -297,6 +297,12 @@ impl DataFrameValue<String> for Option<Vec<String>> {
     }
 }
 
+impl DataFrameValue<String> for DateTime<Utc> {
+    fn value(v: &Self) -> String {
+        v.to_string()
+    }
+}
+
 impl DataFrameValue<String> for Option<DateTime<Utc>> {
     fn value(v: &Self) -> String {
         v.as_ref()
@@ -759,6 +765,7 @@ pub struct CacheItem {
 #[repr(u8)]
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
 pub enum QueueItemStatus {
+    Pending = 0,
     Active = 1,
 }
 
@@ -766,7 +773,10 @@ data_frame_from! {
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct QueueItem {
     key: String,
-    status: QueueItemStatus
+    status: QueueItemStatus,
+    priority: u64,
+    created: DateTime<Utc>,
+    heartbeat: Option<DateTime<Utc>>
 }
 }
 
@@ -1221,12 +1231,17 @@ pub trait MetaStore: DIService + Send + Sync {
 
     async fn debug_dump(&self, out_path: String) -> Result<(), CubeError>;
 
+    // cache
     async fn all_cache(&self) -> Result<Vec<IdRow<CacheItem>>, CubeError>;
     async fn cache_set(&self, item: CacheItem, nx: bool) -> Result<bool, CubeError>;
     async fn cache_truncate(&self) -> Result<(), CubeError>;
     async fn cache_delete(&self, key: String) -> Result<(), CubeError>;
     async fn cache_get(&self, key: String) -> Result<Option<IdRow<CacheItem>>, CubeError>;
     async fn cache_keys(&self, prefix: String) -> Result<Vec<IdRow<CacheItem>>, CubeError>;
+
+    // queue
+    async fn all_queue(&self) -> Result<Vec<IdRow<QueueItem>>, CubeError>;
+    async fn queue_add(&self, item: QueueItem) -> Result<bool, CubeError>;
 
     // Force compaction for specific column family
     async fn cf_compaction(&self, cf: ColumnFamilyName) -> Result<(), CubeError>;
@@ -4131,6 +4146,39 @@ impl MetaStore for RocksMetaStore {
         .await?;
 
         Ok(())
+    }
+
+    async fn all_queue(&self) -> Result<Vec<IdRow<CacheItem>>, CubeError> {
+        self.read_operation_out_of_queue(move |db_ref| {
+            Ok(CacheItemRocksTable::new(db_ref).all_rows()?)
+        })
+            .await
+    }
+
+    async fn queue_add(&self, item: CacheItem, nx: bool) -> Result<bool, CubeError> {
+        self.write_operation_cache(move |db_ref, batch_pipe| {
+            let cache_schema = CacheItemRocksTable::new(db_ref.clone());
+            let index_key = CacheItemIndexKey::ByPath(item.get_path());
+            let id_row_opt = cache_schema
+                .get_single_opt_row_by_index(&index_key, &CacheItemRocksIndex::ByPath)?;
+
+            if let Some(id_row) = id_row_opt {
+                if nx {
+                    return Ok(false);
+                };
+
+                let mut new = id_row.row.clone();
+                new.value = item.value;
+                new.expire = item.expire;
+
+                cache_schema.update(id_row.id, new, &id_row.row, batch_pipe)?;
+            } else {
+                cache_schema.insert(item, batch_pipe)?;
+            }
+
+            Ok(true)
+        })
+            .await
     }
 
     async fn cf_compaction(&self, cf_name: ColumnFamilyName) -> Result<(), CubeError> {

@@ -1,5 +1,7 @@
-const R = require('ramda');
-const { BaseQueueDriver } = require('./BaseQueueDriver');
+import R from 'ramda';
+import { QueueDriverInterface } from '@cubejs-backend/base-driver';
+
+import { BaseQueueDriver } from './BaseQueueDriver';
 
 export class LocalQueueDriverConnection {
   constructor(driver, options) {
@@ -268,6 +270,9 @@ const heartBeat = {};
 const processingCounters = {};
 const processingLocks = {};
 
+/**
+ * @implements {QueueDriverInterface}
+ */
 export class LocalQueueDriver extends BaseQueueDriver {
   constructor(options) {
     super();

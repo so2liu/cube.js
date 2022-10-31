@@ -1,4 +1,6 @@
 import R from 'ramda';
+import { QueueDriverInterface } from '@cubejs-backend/base-driver';
+
 import { BaseQueueDriver } from './BaseQueueDriver';
 
 export class RedisQueueDriverConnection {
@@ -120,7 +122,7 @@ export class RedisQueueDriverConnection {
         .zrem([this.recentRedisKey(), this.redisHash(queryKey)])
         .hdel([this.queriesDefKey(), this.redisHash(queryKey)])
         .del(this.queryProcessingLockKey(queryKey));
-      
+
       if (this.getQueueEventsBus) {
         tx.publish(
           this.getQueueEventsBus().eventsChannel,
@@ -317,6 +319,9 @@ export class RedisQueueDriverConnection {
   }
 }
 
+/**
+ * @implements {QueueDriverInterface}
+ */
 export class RedisQueueDriver extends BaseQueueDriver {
   constructor(options) {
     super();

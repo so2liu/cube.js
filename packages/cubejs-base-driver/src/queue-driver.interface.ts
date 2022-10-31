@@ -2,8 +2,9 @@ export type QueryStageStateResponse = any[];
 
 export interface LocalQueueDriverConnectionInterface {
   getResultBlocking(queryKey: string): Promise<unknown>;
-  getResult(queryKey: string): Promise<unknown>;
-  addToQueue(keyScore: any, queryKey: any, orphanedTime: any, queryHandler: any, query: any, priority: any, options: any): Promise<unknown>;
+  getResult(queryKey: string): Promise<any>;
+  addToQueue(keyScore: number, queryKey: string, orphanedTime: any, queryHandler: any, query: any, priority: any, options: any): Promise<unknown>;
+  getQueryAndRemove(queryKey: string): Promise<unknown>;
   getToProcessQueries(): Promise<unknown>;
   getActiveQueries(): Promise<unknown>;
   getOrphanedQueries(): Promise<unknown>;
@@ -16,7 +17,7 @@ export interface LocalQueueDriverConnectionInterface {
   optimisticQueryUpdate(queryKey, toUpdate, processingId): Promise<unknown>;
   cancelQuery(queryKey: string): Promise<unknown>;
   setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<unknown>;
-  release(): Promise<void>;
+  release(): void;
 }
 
 export interface QueueDriverInterface {

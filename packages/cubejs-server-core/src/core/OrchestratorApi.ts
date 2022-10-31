@@ -79,7 +79,7 @@ export class OrchestratorApi {
         const job = await fetchQueryPromise;
         return job;
       }
-      
+
       fetchQueryPromise = pt.timeout(fetchQueryPromise, this.continueWaitTimeout * 1000);
 
       const data = await fetchQueryPromise;
@@ -227,7 +227,7 @@ export class OrchestratorApi {
     dataSource = 'default',
     schema: string,
     table: string,
-    key: any[],
+    key: string,
     token: string,
   ): Promise<[boolean, string]> {
     return this.orchestrator.isPartitionExist(

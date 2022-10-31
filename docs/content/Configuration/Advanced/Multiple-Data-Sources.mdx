@@ -1,0 +1,104 @@
+---
+title: Multiple Data Sources
+permalink: /config/multiple-data-sources
+category: Configuration
+subCategory: Advanced
+menuOrder: 2
+---
+
+Cube supports using multiple data sources, allowing the use of different
+databases for different cubes.
+
+## Schema
+
+To configure multiple data sources, first explicitly declare a data source in
+some cubes by adding a `dataSource` property:
+
+```javascript
+cube('Orders', {
+  ...,
+
+  dataSource: 'default',
+});
+
+cube('OrdersFromOtherDataSource', {
+  ...,
+
+  dataSource: 'datasource1',
+});
+```
+
+Next, Cube must be configured so that it knows which database to use for each
+data source. This can be done either with the
+[`driverFactory`][ref-config-ref-driverfactory] property in the `cube.js`
+configuration file or through environment variables.
+
+## Configuring data sources with cube.js
+
+In the `cube.js` configuration file, the
+[`driverFactory`][ref-config-ref-driverfactory] property can be used to declare
+`DriverConfig` objects for each data source:
+
+```javascript
+module.exports = {
+  driverFactory: ({ dataSource }) => {
+    if (dataSource === 'default') {
+      return {
+        type: 'postgres',
+        database: 'ecom',
+        host: 'localhost',
+      };
+    }
+
+    if (dataSource === 'datasource1') {
+      return {
+        type: 'postgres',
+        database: 'ecom',
+        host: 'remotehost',
+      };
+    }
+  },
+};
+```
+
+## Configuring data sources with environment variables
+
+Multiple data sources can also be configured using environment variables; first
+declare the data sources using the `CUBEJS_DATASOURCES` environment variable,
+then use
+[decorated environment variables](#environment-variables-decorated-environment-variables)
+to configure each data source:
+
+```bash
+CUBEJS_DATASOURCES=default,datasource1
+CUBEJS_DS_default_DB_TYPE=postgres
+CUBEJS_DS_default_DB_NAME=ecom
+CUBEJS_DS_default_DB_HOST=localhost
+CUBEJS_DS_datasource1_DB_TYPE=postgres
+CUBEJS_DS_datasource1_DB_NAME=ecom
+CUBEJS_DS_datasource1_DB_HOST=remotehost
+```
+
+### Decorated environment variables
+
+Cube allows database-specific environment variables to be decorated with a data
+source name:
+
+```bash
+CUBEJS_[DS_<DATASOURCE>_]<ENV_VAR>
+```
+
+For example, using the `default` data source, `CUBEJS_DB_TYPE` could be
+decorated as:
+
+```bash
+CUBEJS_DS_default_DB_TYPE=postgres
+```
+
+For more information on environment variables that support decoration, check the
+[Environment Variables reference][ref-config-ref-env], or [a database-specific
+page if required][ref-config-db].
+
+[ref-config-ref-env]: /reference/environment-variables
+[ref-config-ref-driverfactory]: /config#options-reference-driver-factory
+[ref-config-db]: /config/databases

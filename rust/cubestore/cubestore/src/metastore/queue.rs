@@ -1,0 +1,94 @@
+use super::{
+    BaseRocksSecondaryIndex, ColumnFamilyName, IdRow, IndexId, MetaStoreEvent, QueueItem,
+    RocksSecondaryIndex, RocksTable, TableId,
+};
+use crate::{base_rocks_secondary_index, rocks_table_impl};
+
+use crate::metastore::QueueItemStatus;
+use regex::internal::Input;
+use rocksdb::DB;
+use serde::{Deserialize, Deserializer};
+
+impl QueueItem {
+    pub fn new(key: String, status: QueueItemStatus) -> Self {
+        QueueItem { key, status }
+    }
+
+    pub fn get_key(&self) -> &String {
+        &self.key
+    }
+
+    pub fn get_status(&self) -> &QueueItemStatus {
+        &self.status
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum QueueItemRocksIndex {
+    ByKey = 1,
+    ByStatus = 2,
+}
+
+rocks_table_impl!(
+    QueueItem,
+    QueueItemRocksTable,
+    TableId::CacheItems,
+    {
+        vec![
+            Box::new(QueueItemRocksIndex::ByKey),
+            Box::new(QueueItemRocksIndex::ByStatus),
+        ]
+    },
+    ColumnFamilyName::Cache
+);
+
+#[derive(Hash, Clone, Debug)]
+pub enum QueueItemIndexKey {
+    ByKey(String),
+    ByStatus(QueueItemStatus),
+}
+
+base_rocks_secondary_index!(QueueItem, QueueItemRocksIndex);
+
+impl RocksSecondaryIndex<QueueItem, QueueItemIndexKey> for QueueItemRocksIndex {
+    fn typed_key_by(&self, row: &QueueItem) -> QueueItemIndexKey {
+        match self {
+            QueueItemRocksIndex::ByKey => QueueItemIndexKey::ByKey(row.get_key().clone()),
+            QueueItemRocksIndex::ByStatus => QueueItemIndexKey::ByStatus(row.get_status().clone()),
+        }
+    }
+
+    fn key_to_bytes(&self, key: &QueueItemIndexKey) -> Vec<u8> {
+        match key {
+            QueueItemIndexKey::ByKey(s) => s.as_bytes().to_vec(),
+            QueueItemIndexKey::ByStatus(s) => {
+                let mut r = Vec::with_capacity(1);
+                r.push(1_u8);
+
+                r
+            }
+        }
+    }
+
+    fn is_unique(&self) -> bool {
+        match self {
+            QueueItemRocksIndex::ByKey => true,
+            QueueItemRocksIndex::ByStatus => false,
+        }
+    }
+
+    fn version(&self) -> u32 {
+        match self {
+            QueueItemRocksIndex::ByKey => 1,
+            QueueItemRocksIndex::ByStatus => 1,
+        }
+    }
+
+    fn is_ttl(&self) -> bool {
+        false
+    }
+
+    fn get_id(&self) -> IndexId {
+        *self as IndexId
+    }
+}

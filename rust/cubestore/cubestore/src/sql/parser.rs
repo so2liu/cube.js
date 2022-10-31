@@ -71,6 +71,9 @@ pub enum Statement {
         key: Ident,
     },
     CacheTruncate {},
+    QueueAdd {
+        key: Ident,
+    },
     System(SystemCommand),
     Dump(Box<Query>),
 }
@@ -103,6 +106,10 @@ impl<'a> CubeStoreParser<'a> {
                 _ if w.value.eq_ignore_ascii_case("sys") => {
                     self.parser.next_token();
                     self.parse_system()
+                }
+                _ if w.value.eq_ignore_ascii_case("queue") => {
+                    self.parser.next_token();
+                    self.parse_queue()
                 }
                 Keyword::CACHE => {
                     self.parser.next_token();
@@ -198,6 +205,27 @@ impl<'a> CubeStoreParser<'a> {
                 key: self.parser.parse_identifier()?,
             }),
             "truncate" => Ok(Statement::CacheTruncate {}),
+            command => Err(ParserError::ParserError(format!(
+                "Unknown cache command: {}",
+                command
+            ))),
+        }
+    }
+
+    fn parse_queue(&mut self) -> Result<Statement, ParserError> {
+        let command = match self.parser.next_token() {
+            Token::Word(w) => w.value.to_ascii_lowercase(),
+            _ => {
+                return Err(ParserError::ParserError(
+                    "Unknown queue command, available: ADD".to_string(),
+                ))
+            }
+        };
+
+        match command.as_str() {
+            "add" => Ok(Statement::QueueAdd {
+                key: self.parser.parse_identifier()?,
+            }),
             command => Err(ParserError::ParserError(format!(
                 "Unknown cache command: {}",
                 command

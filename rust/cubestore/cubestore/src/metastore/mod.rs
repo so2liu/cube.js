@@ -7,6 +7,7 @@ pub mod listener;
 pub mod metastore_fs;
 pub mod multi_index;
 pub mod partition;
+pub mod queue;
 pub mod schema;
 pub mod source;
 pub mod table;
@@ -86,6 +87,7 @@ use tokio::fs::File;
 use tokio::sync::broadcast::Sender;
 
 use crate::metastore::compaction::{CompactionPreloadedState, CompactionSharedState};
+use crate::metastore::queue::QueueItemRocksTable;
 use wal::WALRocksTable;
 
 #[macro_export]
@@ -312,6 +314,12 @@ impl DataFrameValue<String> for Option<ImportFormat> {
 }
 
 impl DataFrameValue<String> for IndexType {
+    fn value(v: &Self) -> String {
+        format!("{:?}", v)
+    }
+}
+
+impl DataFrameValue<String> for QueueItemStatus {
     fn value(v: &Self) -> String {
         format!("{:?}", v)
     }
@@ -748,6 +756,20 @@ pub struct CacheItem {
 }
 }
 
+#[repr(u8)]
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+pub enum QueueItemStatus {
+    Active = 1,
+}
+
+data_frame_from! {
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct QueueItem {
+    key: String,
+    status: QueueItemStatus
+}
+}
+
 data_frame_from! {
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
 pub struct Chunk {
@@ -909,6 +931,7 @@ meta_store_table_impl!(IndexMetaStoreTable, Index, IndexRocksTable);
 meta_store_table_impl!(PartitionMetaStoreTable, Partition, PartitionRocksTable);
 meta_store_table_impl!(TableMetaStoreTable, Table, TableRocksTable);
 meta_store_table_impl!(CacheItemMetaStoreTable, CacheItem, CacheItemRocksTable);
+meta_store_table_impl!(QueueItemMetaStoreTable, QueueItem, QueueItemRocksTable);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PartitionData {
@@ -1246,6 +1269,9 @@ pub enum MetaStoreEvent {
 
     UpdateCacheItem(IdRow<CacheItem>, IdRow<CacheItem>),
     DeleteCacheItem(IdRow<CacheItem>),
+
+    UpdateQueueItem(IdRow<QueueItem>, IdRow<QueueItem>),
+    DeleteQueueItem(IdRow<QueueItem>),
 }
 
 type SecondaryKey = Vec<u8>;
@@ -1404,24 +1430,17 @@ enum_from_primitive! {
         Sources = 0x0800,
         MultiIndexes = 0x0900,
         MultiPartitions = 0x0A00,
-        CacheItems = 0x0B00
+        CacheItems = 0x0B00,
+        QueueItems = 0x0C00
     }
 }
 
 impl TableId {
     pub fn has_ttl(&self) -> bool {
         match self {
-            TableId::Schemas => false,
-            TableId::Tables => false,
-            TableId::Indexes => false,
-            TableId::Partitions => false,
-            TableId::Chunks => false,
-            TableId::WALs => false,
-            TableId::Jobs => false,
-            TableId::Sources => false,
-            TableId::MultiIndexes => false,
-            TableId::MultiPartitions => false,
             TableId::CacheItems => true,
+            TableId::QueueItems => true,
+            _ => false,
         }
     }
 }
@@ -1438,6 +1457,7 @@ fn migrate_all_tables<'a>(table_ref: DbTableRef<'a>) -> Result<(), CubeError> {
     MultiIndexRocksTable::new(table_ref.clone()).migration()?;
     MultiPartitionRocksTable::new(table_ref.clone()).migration()?;
     CacheItemRocksTable::new(table_ref.clone()).migration()?;
+    QueueItemRocksTable::new(table_ref.clone()).migration()?;
     Ok(())
 }
 
@@ -1469,6 +1489,7 @@ fn get_compaction_state() -> CompactionPreloadedState {
     populate_indexes!(MultiIndexRocksTable);
     populate_indexes!(MultiPartitionRocksTable);
     populate_indexes!(CacheItemRocksTable);
+    populate_indexes!(QueueItemRocksTable);
 
     CompactionPreloadedState::new(indexes)
 }

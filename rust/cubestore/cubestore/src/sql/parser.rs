@@ -72,7 +72,9 @@ pub enum Statement {
     },
     CacheTruncate {},
     QueueAdd {
+        priority: u64,
         key: Ident,
+        value: String,
     },
     System(SystemCommand),
     Dump(Box<Query>),
@@ -223,9 +225,36 @@ impl<'a> CubeStoreParser<'a> {
         };
 
         match command.as_str() {
-            "add" => Ok(Statement::QueueAdd {
-                key: self.parser.parse_identifier()?,
-            }),
+            "add" => {
+                let priority = if self.parse_custom_token(&"priority") {
+                    match self.parser.parse_number_value()? {
+                        Value::Number(priority, false) => {
+                            let r = priority.parse::<u64>().map_err(|err| {
+                                ParserError::ParserError(format!(
+                                    "priority must be a positive integer, error: {}",
+                                    err
+                                ))
+                            })?;
+
+                            r
+                        }
+                        x => {
+                            return Err(ParserError::ParserError(format!(
+                                "priority must be a positive integer, actual: {:?}",
+                                x
+                            )))
+                        }
+                    }
+                } else {
+                    0
+                };
+
+                Ok(Statement::QueueAdd {
+                    priority,
+                    key: self.parser.parse_identifier()?,
+                    value: self.parser.parse_literal_string()?,
+                })
+            }
             command => Err(ParserError::ParserError(format!(
                 "Unknown cache command: {}",
                 command

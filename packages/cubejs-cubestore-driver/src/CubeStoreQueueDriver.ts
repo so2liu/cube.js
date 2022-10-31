@@ -40,7 +40,7 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
 
     console.log('addtoQueue data', data);
 
-    const rows = await this.driver.query(`QUEUE ADD PRIORITY "${queryKey}"`, []);
+    const rows = await this.driver.query(`QUEUE ADD PRIORITY ${priority} "${queryKey}" "${JSON.stringify(data)}"`, []);
 
     return [
       1,
@@ -129,9 +129,14 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 }
 
+interface QueueDriverOptions {
+
+}
+
 export class CubeStoreQueueDriver implements QueueDriverInterface {
   public constructor(
-    protected readonly driver: CubeStoreDriver
+    protected readonly driver: CubeStoreDriver,
+    protected readonly options: QueueDriverOptions
   ) {}
 
   public async createConnection(): Promise<CubestoreQueueDriverConnection> {

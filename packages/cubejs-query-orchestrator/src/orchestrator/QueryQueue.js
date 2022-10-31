@@ -1,7 +1,7 @@
 import R from 'ramda';
 import { getEnv } from '@cubejs-backend/shared';
 import { QueueDriverInterface } from '@cubejs-backend/base-driver';
-import { CubeStoreQueueDriver } from '@cubejs-backend/cubestore-driver';
+import { CubeStoreDriver, CubeStoreQueueDriver } from '@cubejs-backend/cubestore-driver';
 
 import { TimeoutError } from './TimeoutError';
 import { ContinueWaitError } from './ContinueWaitError';
@@ -20,7 +20,8 @@ function factoryQueueDriver(cacheAndQueueDriver, queueDriverOptions) {
     case 'memory':
       return new LocalQueueDriver(queueDriverOptions);
     case 'cubestore':
-      return new CubeStoreQueueDriver(queueDriverOptions);
+      // todo: fix me
+      return new CubeStoreQueueDriver(new CubeStoreDriver({}), queueDriverOptions);
     default:
       throw new Error(`Unknown queue driver: ${cacheAndQueueDriver}`);
   }

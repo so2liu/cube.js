@@ -45,7 +45,7 @@ use crate::metastore::multi_index::MultiIndex;
 use crate::metastore::source::SourceCredentials;
 use crate::metastore::{
     is_valid_plain_binary_hll, table::Table, CacheItem, HllFlavour, IdRow, ImportFormat, Index,
-    IndexDef, IndexType, MetaStoreTable, RowKey, Schema, TableId,
+    IndexDef, IndexType, MetaStoreTable, QueueItem, RowKey, Schema, TableId,
 };
 use crate::queryplanner::panic::PanicWorkerNode;
 use crate::queryplanner::pretty_printers::{pp_phys_plan, pp_plan};
@@ -1108,6 +1108,21 @@ impl SqlService for SqlServiceImpl {
             }
             CubeStoreStatement::CacheTruncate {} => {
                 self.db.cache_truncate().await?;
+
+                Ok(Arc::new(DataFrame::new(vec![], vec![])))
+            }
+            CubeStoreStatement::QueueAdd {
+                key,
+                priority,
+                value,
+            } => {
+                self.db
+                    .queue_add(QueueItem::new(
+                        key.value,
+                        QueueItem::status_default(),
+                        priority,
+                    ))
+                    .await?;
 
                 Ok(Arc::new(DataFrame::new(vec![], vec![])))
             }

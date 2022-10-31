@@ -21,9 +21,9 @@ use crate::metastore::multi_index::MultiPartition;
 use crate::metastore::table::{Table, TablePath};
 use crate::metastore::{IdRow, MetaStore};
 use crate::queryplanner::info_schema::{
-    InfoSchemaCacheDef, SchemataInfoSchemaTableDef, SystemChunksTableDef, SystemIndexesTableDef,
-    SystemJobsTableDef, SystemPartitionsTableDef, SystemRocksdbStatsDef, SystemTablesTableDef,
-    TablesInfoSchemaTableDef,
+    InfoSchemaCacheDef, InfoSchemaQueueDef, SchemataInfoSchemaTableDef, SystemChunksTableDef,
+    SystemIndexesTableDef, SystemJobsTableDef, SystemPartitionsTableDef, SystemRocksdbStatsDef,
+    SystemTablesTableDef, TablesInfoSchemaTableDef,
 };
 use crate::queryplanner::now::MaterializeNow;
 use crate::queryplanner::planning::{choose_index_ext, ClusterSendNode};
@@ -313,6 +313,10 @@ impl ContextProvider for MetaStoreSchemaProvider {
                 self.meta_store.clone(),
                 InfoSchemaTable::SystemCache,
             ))),
+            ("system", "queue") => Some(Arc::new(InfoSchemaTableProvider::new(
+                self.meta_store.clone(),
+                InfoSchemaTable::SystemQueue,
+            ))),
             _ => None,
         })
     }
@@ -347,6 +351,7 @@ pub enum InfoSchemaTable {
     Schemata,
     SystemJobs,
     SystemCache,
+    SystemQueue,
     SystemRocksdbStats,
     SystemTables,
     SystemIndexes,
@@ -407,6 +412,7 @@ impl InfoSchemaTable {
             InfoSchemaTable::Tables => Box::new(TablesInfoSchemaTableDef),
             InfoSchemaTable::Schemata => Box::new(SchemataInfoSchemaTableDef),
             InfoSchemaTable::SystemCache => Box::new(InfoSchemaCacheDef),
+            InfoSchemaTable::SystemQueue => Box::new(InfoSchemaQueueDef),
             InfoSchemaTable::SystemRocksdbStats => Box::new(SystemRocksdbStatsDef),
             InfoSchemaTable::SystemTables => Box::new(SystemTablesTableDef),
             InfoSchemaTable::SystemIndexes => Box::new(SystemIndexesTableDef),

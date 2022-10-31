@@ -87,7 +87,7 @@ use tokio::fs::File;
 use tokio::sync::broadcast::Sender;
 
 use crate::metastore::compaction::{CompactionPreloadedState, CompactionSharedState};
-use crate::metastore::queue::QueueItemRocksTable;
+use crate::metastore::queue::{QueueItemIndexKey, QueueItemRocksIndex, QueueItemRocksTable};
 use wal::WALRocksTable;
 
 #[macro_export]
@@ -773,7 +773,9 @@ data_frame_from! {
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct QueueItem {
     key: String,
+    #[serde(default = "QueueItem::status_default")]
     status: QueueItemStatus,
+    #[serde(default)]
     priority: u64,
     created: DateTime<Utc>,
     heartbeat: Option<DateTime<Utc>>
@@ -4148,37 +4150,32 @@ impl MetaStore for RocksMetaStore {
         Ok(())
     }
 
-    async fn all_queue(&self) -> Result<Vec<IdRow<CacheItem>>, CubeError> {
+    async fn all_queue(&self) -> Result<Vec<IdRow<QueueItem>>, CubeError> {
         self.read_operation_out_of_queue(move |db_ref| {
-            Ok(CacheItemRocksTable::new(db_ref).all_rows()?)
+            println!(
+                "rows {:?}",
+                QueueItemRocksTable::new(db_ref.clone()).all_rows()
+            );
+
+            Ok(QueueItemRocksTable::new(db_ref).all_rows()?)
         })
-            .await
+        .await
     }
 
-    async fn queue_add(&self, item: CacheItem, nx: bool) -> Result<bool, CubeError> {
+    async fn queue_add(&self, item: QueueItem) -> Result<bool, CubeError> {
         self.write_operation_cache(move |db_ref, batch_pipe| {
-            let cache_schema = CacheItemRocksTable::new(db_ref.clone());
-            let index_key = CacheItemIndexKey::ByPath(item.get_path());
-            let id_row_opt = cache_schema
-                .get_single_opt_row_by_index(&index_key, &CacheItemRocksIndex::ByPath)?;
+            let queue_schema = QueueItemRocksTable::new(db_ref.clone());
+            let index_key = QueueItemIndexKey::ByKey(item.get_key().clone());
+            let id_row_opt = queue_schema
+                .get_single_opt_row_by_index(&index_key, &QueueItemRocksIndex::ByKey)?;
 
-            if let Some(id_row) = id_row_opt {
-                if nx {
-                    return Ok(false);
-                };
-
-                let mut new = id_row.row.clone();
-                new.value = item.value;
-                new.expire = item.expire;
-
-                cache_schema.update(id_row.id, new, &id_row.row, batch_pipe)?;
-            } else {
-                cache_schema.insert(item, batch_pipe)?;
+            if id_row_opt.is_none() {
+                queue_schema.insert(item, batch_pipe)?;
             }
 
             Ok(true)
         })
-            .await
+        .await
     }
 
     async fn cf_compaction(&self, cf_name: ColumnFamilyName) -> Result<(), CubeError> {

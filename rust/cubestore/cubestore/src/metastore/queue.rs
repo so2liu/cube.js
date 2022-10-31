@@ -3,9 +3,9 @@ use super::{
     RocksSecondaryIndex, RocksTable, TableId,
 };
 use crate::{base_rocks_secondary_index, rocks_table_impl};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
-use crate::metastore::QueueItemStatus;
+use crate::metastore::{IndexType, QueueItemStatus};
 use rocksdb::DB;
 use serde::{Deserialize, Deserializer};
 
@@ -27,6 +27,14 @@ impl QueueItem {
     pub fn get_status(&self) -> &QueueItemStatus {
         &self.status
     }
+
+    pub fn get_created(&self) -> &DateTime<Utc> {
+        &self.created
+    }
+
+    pub fn status_default() -> QueueItemStatus {
+        QueueItemStatus::Pending
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -38,7 +46,7 @@ pub(crate) enum QueueItemRocksIndex {
 rocks_table_impl!(
     QueueItem,
     QueueItemRocksTable,
-    TableId::CacheItems,
+    TableId::QueueItems,
     {
         vec![
             Box::new(QueueItemRocksIndex::ByKey),

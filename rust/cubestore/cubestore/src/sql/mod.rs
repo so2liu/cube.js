@@ -1114,11 +1114,12 @@ impl SqlService for SqlServiceImpl {
             CubeStoreStatement::QueueAdd {
                 key,
                 priority,
-                value: _,
+                value,
             } => {
                 self.db
                     .queue_add(QueueItem::new(
                         key.value,
+                        value,
                         QueueItem::status_default(),
                         priority,
                     ))

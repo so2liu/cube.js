@@ -79,7 +79,8 @@ export class QueryQueue {
       const result = await this.processQuerySkipQueue(queryDef);
       return this.parseResult(result);
     }
-    const redisClient = await this.queueDriver.createConnection();
+
+    const queueConnection = await this.queueDriver.createConnection();
     try {
       if (priority == null) {
         priority = 0;
@@ -91,14 +92,14 @@ export class QueryQueue {
       // Result here won't be fetched for a forced build query and a jobed build
       // query (initialized by the /cubejs-system/v1/pre-aggregations/jobs
       // endpoint).
-      let result = !query.forceBuild && await redisClient.getResult(queryKey);
+      let result = !query.forceBuild && await queueConnection.getResult(queryKey);
 
       if (result) {
         return this.parseResult(result);
       }
 
       if (query.forceBuild) {
-        const jobExists = await redisClient.getQueryDef(queryKey);
+        const jobExists = await queueConnection.getQueryDef(queryKey);
         if (jobExists) return null;
       }
 
@@ -107,7 +108,7 @@ export class QueryQueue {
 
       const orphanedTimeout = 'orphanedTimeout' in query ? query.orphanedTimeout : this.orphanedTimeout;
       const orphanedTime = time + (orphanedTimeout * 1000);
-      const [added, _b, _c, queueSize, addedToQueueTime] = await redisClient.addToQueue(
+      const [added, _b, _c, queueSize, addedToQueueTime] = await queueConnection.addToQueue(
         keyScore, queryKey, orphanedTime, queryHandler, query, priority, options
       );
 
@@ -129,8 +130,8 @@ export class QueryQueue {
 
       await this.reconcileQueue();
 
-      const queryDef = await redisClient.getQueryDef(queryKey);
-      const [active, toProcess] = await redisClient.getQueryStageState(true);
+      const queryDef = await queueConnection.getQueryDef(queryKey);
+      const [active, toProcess] = await queueConnection.getQueryStageState(true);
 
       if (queryDef) {
         this.logger('Waiting for query', {
@@ -140,15 +141,15 @@ export class QueryQueue {
           requestId: options.requestId,
           activeQueryKeys: active,
           toProcessQueryKeys: toProcess,
-          active: active.indexOf(redisClient.redisHash(queryKey)) !== -1,
-          queueIndex: toProcess.indexOf(redisClient.redisHash(queryKey)),
+          active: active.indexOf(queueConnection.redisHash(queryKey)) !== -1,
+          queueIndex: toProcess.indexOf(queueConnection.redisHash(queryKey)),
           waitingForRequestId: queryDef.requestId
         });
       }
 
       // Result here won't be fetched for a jobed build query (initialized by
       // the /cubejs-system/v1/pre-aggregations/jobs endpoint).
-      result = !query.isJob && await redisClient.getResultBlocking(queryKey);
+      result = !query.isJob && await queueConnection.getResultBlocking(queryKey);
 
       // We don't want to throw the ContinueWaitError for  a jobed build query.
       if (!query.isJob && !result) {
@@ -157,7 +158,7 @@ export class QueryQueue {
 
       return this.parseResult(result);
     } finally {
-      this.queueDriver.release(redisClient);
+      this.queueDriver.release(queueConnection);
     }
   }
 
@@ -199,17 +200,17 @@ export class QueryQueue {
   }
 
   async getQueries() {
-    const redisClient = await this.queueDriver.createConnection();
+    const queueConnection = await this.queueDriver.createConnection();
     try {
       const [stalledQueries, orphanedQueries, activeQueries, toProcessQueries] = await Promise.all([
-        redisClient.getStalledQueries(),
-        redisClient.getOrphanedQueries(),
-        redisClient.getActiveQueries(),
-        redisClient.getToProcessQueries()
+        queueConnection.getStalledQueries(),
+        queueConnection.getOrphanedQueries(),
+        queueConnection.getActiveQueries(),
+        queueConnection.getToProcessQueries()
       ]);
 
       const mapWithDefinition = (arr) => Promise.all(arr.map(async queryKey => ({
-        ...(await redisClient.getQueryDef(queryKey)),
+        ...(await queueConnection.getQueryDef(queryKey)),
         queryKey
       })));
 
@@ -238,14 +239,14 @@ export class QueryQueue {
         return obj;
       }, {}));
     } finally {
-      this.queueDriver.release(redisClient);
+      this.queueDriver.release(queueConnection);
     }
   }
 
   async cancelQuery(queryKey) {
-    const redisClient = await this.queueDriver.createConnection();
+    const queueConnection = await this.queueDriver.createConnection();
     try {
-      const query = await redisClient.cancelQuery(queryKey);
+      const query = await queueConnection.cancelQuery(queryKey);
 
       if (query) {
         this.logger('Cancelling query manual', {
@@ -263,21 +264,21 @@ export class QueryQueue {
 
       return true;
     } finally {
-      this.queueDriver.release(redisClient);
+      this.queueDriver.release(queueConnection);
     }
   }
 
   async reconcileQueueImpl() {
-    const redisClient = await this.queueDriver.createConnection();
+    const queueConnection = await this.queueDriver.createConnection();
     try {
       const toCancel = (
-        await redisClient.getStalledQueries()
+        await queueConnection.getStalledQueries()
       ).concat(
-        await redisClient.getOrphanedQueries()
+        await queueConnection.getOrphanedQueries()
       );
 
       await Promise.all(toCancel.map(async queryKey => {
-        const [query] = await redisClient.getQueryAndRemove(queryKey);
+        const [query] = await queueConnection.getQueryAndRemove(queryKey);
         if (query) {
           this.logger('Removing orphaned query', {
             queryKey: query.queryKey,
@@ -293,8 +294,8 @@ export class QueryQueue {
         }
       }));
 
-      const active = await redisClient.getActiveQueries();
-      const toProcess = await redisClient.getToProcessQueries();
+      const active = await queueConnection.getActiveQueries();
+      const toProcess = await queueConnection.getToProcessQueries();
       await Promise.all(
         R.pipe(
           R.filter(p => active.indexOf(p) === -1),
@@ -303,7 +304,7 @@ export class QueryQueue {
         )(toProcess)
       );
     } finally {
-      this.queueDriver.release(redisClient);
+      this.queueDriver.release(queueConnection);
     }
   }
 

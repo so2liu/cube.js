@@ -779,6 +779,7 @@ data_frame_from! {
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct QueueItem {
     key: String,
+    value: String,
     #[serde(default = "QueueItem::status_default")]
     status: QueueItemStatus,
     #[serde(default)]

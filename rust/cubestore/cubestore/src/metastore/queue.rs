@@ -9,9 +9,10 @@ use rocksdb::DB;
 use serde::{Deserialize, Deserializer};
 
 impl QueueItem {
-    pub fn new(key: String, status: QueueItemStatus, priority: i64) -> Self {
+    pub fn new(key: String, value: String, status: QueueItemStatus, priority: i64) -> Self {
         QueueItem {
             key,
+            value,
             status,
             priority,
             created: Utc::now(),
@@ -21,6 +22,10 @@ impl QueueItem {
 
     pub fn get_key(&self) -> &String {
         &self.key
+    }
+
+    pub fn get_value(&self) -> &String {
+        &self.value
     }
 
     pub fn get_status(&self) -> &QueueItemStatus {

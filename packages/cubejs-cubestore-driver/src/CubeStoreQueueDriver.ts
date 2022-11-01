@@ -1,7 +1,7 @@
 import {
   QueueDriverInterface,
   LocalQueueDriverConnectionInterface,
-  QueryStageStateResponse,
+  QueryStageStateResponse, QueryDef,
 } from '@cubejs-backend/base-driver';
 
 import { CubeStoreDriver } from './CubeStoreDriver';
@@ -76,11 +76,14 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 
   public async getActiveQueries(): Promise<unknown> {
-    throw new Error('Unimplemented getActiveQueries');
+    const rows = await this.driver.query('select id from system.queue where status = ?', ['Active']);
+    return rows.map((row) => row.id);
   }
 
-  public async getNextProcessingId(): Promise<string> {
-    throw new Error('Unimplemented getNextProcessingId');
+  public async getNextProcessingId(): Promise<number> {
+    console.log('getNextProcessingId');
+
+    return 0;
   }
 
   public async getOrphanedQueries(): Promise<unknown> {
@@ -116,8 +119,18 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     return [];
   }
 
+  public async getQueryDef(queryKey: string): Promise<QueryDef> {
+    const rows = await this.driver.query('select value from system.queue where id = ?', [this.redisHash(queryKey)]);
+    if (rows && rows.length) {
+      return JSON.parse(rows[0].value);
+    }
+
+    throw new Error(`Unable to find query def for id: "${queryKey}"`);
+  }
+
   public async getToProcessQueries(): Promise<unknown> {
-    throw new Error('Unimplemented getToProcessQueries');
+    const rows = await this.driver.query('select id from system.queue where status = ?', ['Pending']);
+    return rows.map((row) => row.id);
   }
 
   public async optimisticQueryUpdate(queryKey: any, toUpdate: any, processingId: any): Promise<unknown> {

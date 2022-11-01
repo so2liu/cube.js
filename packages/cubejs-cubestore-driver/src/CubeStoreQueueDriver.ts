@@ -5,6 +5,7 @@ import {
 } from '@cubejs-backend/base-driver';
 
 import { CubeStoreDriver } from './CubeStoreDriver';
+import crypto from 'crypto';
 
 interface AddToQueueQuery {
   isJob: boolean,
@@ -21,12 +22,19 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     protected readonly driver: CubeStoreDriver
   ) {}
 
+  public redisHash(queryKey) {
+    return typeof queryKey === 'string' && queryKey.length < 256 ?
+      queryKey :
+      crypto.createHash('md5').update(JSON.stringify(queryKey)).digest('hex');
+  }
+
   public async addToQueue(keyScore: number, queryKey: string, orphanedTime: any, queryHandler: string, query: AddToQueueQuery, priority: number, options: AddToQueueOptions): Promise<unknown> {
     console.log('addtoQueue ..', {
       keyScore, queryKey, orphanedTime, queryHandler, query, priority, options
     });
 
-    // throw new Error('Unimplemented addToQueue');
+    // TODO: Fix sqlparser, support negative number
+    priority = priority < 0 ? 0 : priority;
 
     const data = {
       queryHandler,
@@ -40,7 +48,11 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
 
     console.log('addtoQueue data', data);
 
-    const rows = await this.driver.query(`QUEUE ADD PRIORITY ${priority} "${queryKey}" "${JSON.stringify(data)}"`, []);
+    const rows = await this.driver.query(`QUEUE ADD PRIORITY ? ? ?`, [
+      priority,
+      this.redisHash(queryKey),
+      JSON.stringify(data)
+    ]);
 
     return [
       1,

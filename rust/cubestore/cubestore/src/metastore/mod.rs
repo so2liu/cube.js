@@ -269,6 +269,12 @@ impl DataFrameValue<String> for u64 {
     }
 }
 
+impl DataFrameValue<String> for i64 {
+    fn value(v: &Self) -> String {
+        format!("{}", v)
+    }
+}
+
 impl DataFrameValue<String> for bool {
     fn value(v: &Self) -> String {
         format!("{}", v)
@@ -776,7 +782,7 @@ pub struct QueueItem {
     #[serde(default = "QueueItem::status_default")]
     status: QueueItemStatus,
     #[serde(default)]
-    priority: u64,
+    priority: i64,
     created: DateTime<Utc>,
     heartbeat: Option<DateTime<Utc>>
 }

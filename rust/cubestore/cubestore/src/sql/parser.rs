@@ -72,7 +72,7 @@ pub enum Statement {
     },
     CacheTruncate {},
     QueueAdd {
-        priority: u64,
+        priority: i64,
         key: Ident,
         value: String,
     },
@@ -228,8 +228,8 @@ impl<'a> CubeStoreParser<'a> {
             "add" => {
                 let priority = if self.parse_custom_token(&"priority") {
                     match self.parser.parse_number_value()? {
-                        Value::Number(priority, false) => {
-                            let r = priority.parse::<u64>().map_err(|err| {
+                        Value::Number(priority, _) => {
+                            let r = priority.parse::<i64>().map_err(|err| {
                                 ParserError::ParserError(format!(
                                     "priority must be a positive integer, error: {}",
                                     err

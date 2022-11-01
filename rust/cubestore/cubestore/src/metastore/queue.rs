@@ -1,16 +1,15 @@
 use super::{
     BaseRocksSecondaryIndex, ColumnFamilyName, IdRow, IndexId, MetaStoreEvent, QueueItem,
-    RocksSecondaryIndex, RocksTable, TableId,
+    QueueItemStatus, RocksSecondaryIndex, RocksTable, TableId,
 };
 use crate::{base_rocks_secondary_index, rocks_table_impl};
-use chrono::{DateTime, Utc};
 
-use crate::metastore::{IndexType, QueueItemStatus};
+use chrono::{DateTime, Utc};
 use rocksdb::DB;
 use serde::{Deserialize, Deserializer};
 
 impl QueueItem {
-    pub fn new(key: String, status: QueueItemStatus, priority: u64) -> Self {
+    pub fn new(key: String, status: QueueItemStatus, priority: i64) -> Self {
         QueueItem {
             key,
             status,

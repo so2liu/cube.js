@@ -42,6 +42,37 @@ impl InfoSchemaTableDef for InfoSchemaQueueDef {
                     ))
                 }),
             ),
+            (
+                Field::new("status", DataType::Utf8, false),
+                Box::new(|items| {
+                    Arc::new(StringArray::from(
+                        items
+                            .iter()
+                            .map(|row| format!("{:?}", row.get_row().get_status()))
+                            .collect::<Vec<_>>(),
+                    ))
+                }),
+            ),
+            (
+                Field::new(
+                    "heartbeat",
+                    DataType::Timestamp(TimeUnit::Nanosecond, None),
+                    true,
+                ),
+                Box::new(|items| {
+                    Arc::new(TimestampNanosecondArray::from(
+                        items
+                            .iter()
+                            .map(|row| {
+                                row.get_row()
+                                    .get_heartbeat()
+                                    .as_ref()
+                                    .map(|v| v.timestamp_nanos())
+                            })
+                            .collect::<Vec<_>>(),
+                    ))
+                }),
+            ),
             // (
             //     Field::new("value", DataType::Utf8, false),
             //     Box::new(|items| {

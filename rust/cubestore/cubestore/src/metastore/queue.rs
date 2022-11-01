@@ -27,6 +27,10 @@ impl QueueItem {
         &self.status
     }
 
+    pub fn get_heartbeat(&self) -> &Option<DateTime<Utc>> {
+        &self.heartbeat
+    }
+
     pub fn get_created(&self) -> &DateTime<Utc> {
         &self.created
     }

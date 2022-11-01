@@ -1114,7 +1114,7 @@ impl SqlService for SqlServiceImpl {
             CubeStoreStatement::QueueAdd {
                 key,
                 priority,
-                value,
+                value: _,
             } => {
                 self.db
                     .queue_add(QueueItem::new(
@@ -1123,6 +1123,11 @@ impl SqlService for SqlServiceImpl {
                         priority,
                     ))
                     .await?;
+
+                Ok(Arc::new(DataFrame::new(vec![], vec![])))
+            }
+            CubeStoreStatement::QueueTruncate {} => {
+                self.db.queue_truncate().await?;
 
                 Ok(Arc::new(DataFrame::new(vec![], vec![])))
             }

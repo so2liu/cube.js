@@ -76,6 +76,7 @@ pub enum Statement {
         key: Ident,
         value: String,
     },
+    QueueTruncate {},
     System(SystemCommand),
     Dump(Box<Query>),
 }
@@ -219,7 +220,7 @@ impl<'a> CubeStoreParser<'a> {
             Token::Word(w) => w.value.to_ascii_lowercase(),
             _ => {
                 return Err(ParserError::ParserError(
-                    "Unknown queue command, available: ADD".to_string(),
+                    "Unknown queue command, available: ADD|TRUNCATE".to_string(),
                 ))
             }
         };
@@ -255,6 +256,7 @@ impl<'a> CubeStoreParser<'a> {
                     value: self.parser.parse_literal_string()?,
                 })
             }
+            "truncate" => Ok(Statement::QueueTruncate {}),
             command => Err(ParserError::ParserError(format!(
                 "Unknown cache command: {}",
                 command

@@ -85,6 +85,14 @@ pub enum Statement {
     QueueHeartbeat {
         key: Ident,
     },
+    QueueRetrieve {
+        key: Ident,
+        concurrency: u32,
+    },
+    QueueResult {
+        timeout: u64,
+        key: Ident,
+    },
     QueueTruncate {},
     System(SystemCommand),
     Dump(Box<Query>),
@@ -274,6 +282,60 @@ impl<'a> CubeStoreParser<'a> {
             "heartbeat" => Ok(Statement::QueueHeartbeat {
                 key: self.parser.parse_identifier()?,
             }),
+            "retrieve" => {
+                let concurrency = if self.parse_custom_token(&"concurrency") {
+                    match self.parser.parse_number_value()? {
+                        Value::Number(concurrency, false) => {
+                            let r = concurrency.parse::<u32>().map_err(|err| {
+                                ParserError::ParserError(format!(
+                                    "CONCURRENCY must be a positive integer, error: {}",
+                                    err
+                                ))
+                            })?;
+
+                            r
+                        }
+                        x => {
+                            return Err(ParserError::ParserError(format!(
+                                "CONCURRENCY must be a positive integer, actual: {:?}",
+                                x
+                            )))
+                        }
+                    }
+                } else {
+                    1
+                };
+
+                Ok(Statement::QueueRetrieve {
+                    key: self.parser.parse_identifier()?,
+                    concurrency,
+                })
+            }
+            "result_blocking" => {
+                let timeout = match self.parser.parse_number_value()? {
+                    Value::Number(concurrency, false) => {
+                        let r = concurrency.parse::<u64>().map_err(|err| {
+                            ParserError::ParserError(format!(
+                                "TIMEOUT must be a positive integer, error: {}",
+                                err
+                            ))
+                        })?;
+
+                        r
+                    }
+                    x => {
+                        return Err(ParserError::ParserError(format!(
+                            "TIMEOUT must be a positive integer, actual: {:?}",
+                            x
+                        )))
+                    }
+                };
+
+                Ok(Statement::QueueResult {
+                    timeout,
+                    key: self.parser.parse_identifier()?,
+                })
+            }
             "truncate" => Ok(Statement::QueueTruncate {}),
             command => Err(ParserError::ParserError(format!(
                 "Unknown cache command: {}",

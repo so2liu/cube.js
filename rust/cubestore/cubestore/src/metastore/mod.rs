@@ -24,7 +24,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::hash::{Hash, Hasher};
 use std::{collections::hash_map::DefaultHasher, env, io::Cursor, sync::Arc, time};
 use tokio::fs;
-use tokio::sync::{oneshot, Notify, RwLock};
+use tokio::sync::{broadcast, oneshot, Notify, RwLock};
 
 use crate::config::injection::DIService;
 use crate::config::{Config, ConfigObj};
@@ -84,7 +84,8 @@ use std::time::{Duration, SystemTime};
 use table::Table;
 use table::{TableRocksIndex, TableRocksTable};
 use tokio::fs::File;
-use tokio::sync::broadcast::Sender;
+use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::time::error::Elapsed;
 
 use crate::metastore::compaction::{CompactionPreloadedState, CompactionSharedState};
 use crate::metastore::queue::{QueueItemIndexKey, QueueItemRocksIndex, QueueItemRocksTable};
@@ -773,6 +774,7 @@ pub struct CacheItem {
 pub enum QueueItemStatus {
     Pending = 0,
     Active = 1,
+    Finished = 2,
 }
 
 data_frame_from! {
@@ -1255,6 +1257,12 @@ pub trait MetaStore: DIService + Send + Sync {
     async fn queue_truncate(&self) -> Result<(), CubeError>;
     async fn queue_cancel(&self, key: String) -> Result<Option<IdRow<QueueItem>>, CubeError>;
     async fn queue_heartbeat(&self, key: String) -> Result<(), CubeError>;
+    async fn queue_retrieve(&self, key: String) -> Result<Option<IdRow<QueueItem>>, CubeError>;
+    async fn queue_result(
+        &self,
+        key: String,
+        timeout: u64,
+    ) -> Result<Option<IdRow<QueueItem>>, CubeError>;
 
     // Force compaction for specific column family
     async fn cf_compaction(&self, cf: ColumnFamilyName) -> Result<(), CubeError>;
@@ -2701,6 +2709,37 @@ impl std::fmt::Display for ColumnFamilyName {
     }
 }
 
+pub struct RocksMetaStoreListener<'a> {
+    receiver: Receiver<MetaStoreEvent>,
+    listener_id: usize,
+    metastore: &'a RocksMetaStore,
+}
+
+impl<'a> RocksMetaStoreListener<'a> {
+    pub async fn wait_for_queue_update(
+        mut self,
+        key: String,
+        status: QueueItemStatus,
+    ) -> Result<Option<IdRow<QueueItem>>, CubeError> {
+        loop {
+            let event = self.receiver.recv().await?;
+            if let MetaStoreEvent::UpdateQueueItem(_, new) = &event {
+                if new.get_row().get_key() == &key && new.get_row().get_status() == &status {
+                    return Ok(Some(new.clone()));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+impl<'a> Drop for RocksMetaStoreListener<'a> {
+    fn drop(&mut self) {
+        self.metastore.remove_listener_sync(self.listener_id);
+    }
+}
+
 impl RocksMetaStore {
     pub fn with_listener(
         path: impl AsRef<Path>,
@@ -2881,8 +2920,28 @@ impl RocksMetaStore {
         Ok(())
     }
 
-    pub async fn add_listener(&self, listener: Sender<MetaStoreEvent>) {
-        self.listeners.write().await.push(listener);
+    pub async fn add_listener(&self, listener: Sender<MetaStoreEvent>) -> usize {
+        let mut listeners = self.listeners.write().await;
+        listeners.push(listener);
+
+        listeners.len()
+    }
+
+    pub fn remove_listener_sync(&self, index: usize) {
+        // let mut listeners = self.listeners.blocking_write();
+        // listeners.remove(index);
+    }
+
+    pub async fn get_temporarily_listener<'a>(&'a self) -> RocksMetaStoreListener<'a> {
+        let (event_sender, _) = broadcast::channel(10000); // TODO config
+
+        let listener_id = self.add_listener(event_sender.clone()).await;
+
+        RocksMetaStoreListener {
+            metastore: self,
+            listener_id,
+            receiver: event_sender.subscribe(),
+        }
     }
 
     async fn write_operation<F, R>(&self, f: F) -> Result<R, CubeError>
@@ -4218,6 +4277,54 @@ impl MetaStore for RocksMetaStore {
             }
         })
         .await
+    }
+
+    async fn queue_retrieve(&self, key: String) -> Result<Option<IdRow<QueueItem>>, CubeError> {
+        self.write_operation_cache(move |db_ref, batch_pipe| {
+            let queue_schema = QueueItemRocksTable::new(db_ref.clone());
+            let index_key = QueueItemIndexKey::ByKey(key.clone());
+            let id_row_opt = queue_schema
+                .get_single_opt_row_by_index(&index_key, &QueueItemRocksIndex::ByKey)?;
+
+            if let Some(id_row) = id_row_opt {
+                if id_row.get_row().get_status() == &QueueItemStatus::Pending {
+                    let new = queue_schema.update_with_fn(
+                        id_row.id,
+                        |item| {
+                            let mut new = item.clone();
+                            new.status = QueueItemStatus::Active;
+
+                            new
+                        },
+                        batch_pipe,
+                    )?;
+
+                    Ok(Some(new))
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            }
+        })
+        .await
+    }
+
+    async fn queue_result(
+        &self,
+        key: String,
+        timeout: u64,
+    ) -> Result<Option<IdRow<QueueItem>>, CubeError> {
+        let listener = self.get_temporarily_listener().await;
+        match tokio::time::timeout(
+            Duration::from_millis(timeout),
+            listener.wait_for_queue_update(key, QueueItemStatus::Active),
+        )
+        .await
+        {
+            Ok(res) => res,
+            Err(err) => Ok(None),
+        }
     }
 
     async fn queue_heartbeat(&self, key: String) -> Result<(), CubeError> {

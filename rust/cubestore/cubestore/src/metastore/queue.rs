@@ -2,7 +2,7 @@ use super::{
     BaseRocksSecondaryIndex, ColumnFamilyName, IdRow, IndexId, MetaStoreEvent, QueueItem,
     QueueItemStatus, RocksSecondaryIndex, RocksTable, TableId,
 };
-use crate::{base_rocks_secondary_index, rocks_table_impl};
+use crate::{base_rocks_secondary_index, rocks_table_impl, CubeError};
 
 use chrono::{DateTime, Utc};
 use rocksdb::DB;
@@ -96,6 +96,7 @@ impl RocksSecondaryIndex<QueueItem, QueueItemIndexKey> for QueueItemRocksIndex {
                 match s {
                     QueueItemStatus::Pending => r.push(0_u8),
                     QueueItemStatus::Active => r.push(1_u8),
+                    QueueItemStatus::Finished => r.push(2_u8),
                 }
 
                 r

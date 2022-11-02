@@ -17,10 +17,25 @@ interface AddToQueueOptions {
   requestId: string
 }
 
+interface QueueDriverOptions {
+  redisQueuePrefix: string,
+  concurrency: number,
+}
+
 class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterface {
   public constructor(
-    protected readonly driver: CubeStoreDriver
-  ) {}
+    protected readonly driver: CubeStoreDriver,
+    protected readonly options: QueueDriverOptions,
+  ) {
+  }
+
+  protected getKey(suffix: string, queryKey?: string): string {
+    if (queryKey) {
+      return `${suffix}:${this.options.redisQueuePrefix}:${this.redisHash(queryKey)}`;
+    } else {
+      return `${suffix}:${this.options.redisQueuePrefix}`;
+    }
+  }
 
   public redisHash(queryKey) {
     return typeof queryKey === 'string' && queryKey.length < 256 ?
@@ -88,10 +103,15 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     return rows.map((row) => row.id);
   }
 
-  public async getNextProcessingId(): Promise<number> {
-    console.log('getNextProcessingId');
+  public async getNextProcessingId(): Promise<number | string> {
+    const rows = await this.driver.query('CACHE INCR ?', [
+      this.getKey('PROCESSING_COUNTER')
+    ]);
+    if (rows && rows.length) {
+      return rows[0].value;
+    }
 
-    return 0;
+    throw new Error('Unable to get next processing id');
   }
 
   public async getQueryStageState(onlyKeys: boolean): Promise<QueryStageStateResponse> {
@@ -161,10 +181,6 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 }
 
-interface QueueDriverOptions {
-
-}
-
 export class CubeStoreQueueDriver implements QueueDriverInterface {
   public constructor(
     protected readonly driver: CubeStoreDriver,
@@ -172,7 +188,7 @@ export class CubeStoreQueueDriver implements QueueDriverInterface {
   ) {}
 
   public async createConnection(): Promise<CubestoreQueueDriverConnection> {
-    return new CubestoreQueueDriverConnection(this.driver);
+    return new CubestoreQueueDriverConnection(this.driver, this.options);
   }
 
   public async release(connection: CubestoreQueueDriverConnection): Promise<void> {

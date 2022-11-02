@@ -64,6 +64,9 @@ pub enum Statement {
     CacheGet {
         key: Ident,
     },
+    CacheIncr {
+        key: Ident,
+    },
     CacheKeys {
         prefix: Ident,
     },
@@ -202,6 +205,9 @@ impl<'a> CubeStoreParser<'a> {
                 })
             }
             "get" => Ok(Statement::CacheGet {
+                key: self.parser.parse_identifier()?,
+            }),
+            "incr" => Ok(Statement::CacheIncr {
                 key: self.parser.parse_identifier()?,
             }),
             "keys" => Ok(Statement::CacheKeys {

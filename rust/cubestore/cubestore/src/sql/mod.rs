@@ -1092,6 +1092,16 @@ impl SqlService for SqlServiceImpl {
                     )))
                 }
             }
+            CubeStoreStatement::CacheIncr { key } => {
+                let row = self.db.cache_incr(key.value).await?;
+
+                Ok(Arc::new(DataFrame::new(
+                    vec![Column::new("value".to_string(), ColumnType::String, 0)],
+                    vec![Row::new(vec![TableValue::String(
+                        row.get_row().get_value().clone(),
+                    )])],
+                )))
+            }
             CubeStoreStatement::CacheKeys { prefix } => {
                 let rows = self.db.cache_keys(prefix.value).await?;
                 Ok(Arc::new(DataFrame::new(

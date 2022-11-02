@@ -1246,6 +1246,7 @@ pub trait MetaStore: DIService + Send + Sync {
     async fn cache_truncate(&self) -> Result<(), CubeError>;
     async fn cache_delete(&self, key: String) -> Result<(), CubeError>;
     async fn cache_get(&self, key: String) -> Result<Option<IdRow<CacheItem>>, CubeError>;
+    async fn cache_incr(&self, key: String) -> Result<IdRow<CacheItem>, CubeError>;
     async fn cache_keys(&self, prefix: String) -> Result<Vec<IdRow<CacheItem>>, CubeError>;
 
     // queue
@@ -4259,6 +4260,29 @@ impl MetaStore for RocksMetaStore {
                 .get_single_opt_row_by_index(&index_key, &CacheItemRocksIndex::ByPath)?;
 
             Ok(id_row_opt)
+        })
+        .await
+    }
+
+    async fn cache_incr(&self, path: String) -> Result<IdRow<CacheItem>, CubeError> {
+        self.write_operation_cache(move |db_ref, batch_pipe| {
+            let cache_schema = CacheItemRocksTable::new(db_ref.clone());
+            let index_key = CacheItemIndexKey::ByPath(path.clone());
+            let id_row_opt = cache_schema
+                .get_single_opt_row_by_index(&index_key, &CacheItemRocksIndex::ByPath)?;
+
+            // TODO: Merge operator?
+            if let Some(id_row) = id_row_opt {
+                let mut new = id_row.row.clone();
+
+                let last_val = id_row.row.value.parse::<i64>()?;
+                new.value = (last_val + 1).to_string();
+
+                cache_schema.update(id_row.id, new, &id_row.row, batch_pipe)
+            } else {
+                let item = CacheItem::new(path, None, "1".to_string());
+                cache_schema.insert(item, batch_pipe)
+            }
         })
         .await
     }

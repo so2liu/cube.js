@@ -1,7 +1,7 @@
 import {
   QueueDriverInterface,
   LocalQueueDriverConnectionInterface,
-  QueryStageStateResponse, QueryDef,
+  QueryStageStateResponse, QueryDef, RetrieveForProcessingResponse,
 } from '@cubejs-backend/base-driver';
 
 import { CubeStoreDriver } from './CubeStoreDriver';
@@ -63,15 +63,23 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     ];
   }
 
-  public async getQueryAndRemove(queryKey: string): Promise<unknown> {
-    throw new Error('Unimplemented getQueryAndRemove');
+  // TODO: Looks useless, because we can do it in one step - getQueriesToCancel
+  public async getQueryAndRemove(queryKey: string): Promise<[QueryDef]> {
+    return this.cancelQuery(queryKey);
   }
 
-  public async cancelQuery(queryKey: string): Promise<unknown> {
-    throw new Error('Unimplemented cancelQuery');
+  public async cancelQuery(queryKey: string): Promise<[QueryDef]> {
+    const rows = await this.driver.query('QUEUE CANCEL ?', [
+      this.redisHash(queryKey)
+    ]);
+    if (rows && rows.length) {
+      return [JSON.parse(rows[0].value)];
+    }
+
+    throw new Error(`Unable to cancel query with id: "${queryKey}"`);
   }
 
-  public async freeProcessingLock(queryKe: string, processingId: string, activated: unknown): Promise<unknown> {
+  public async freeProcessingLock(queryKey: string, processingId: string, activated: unknown): Promise<unknown> {
     throw new Error('Unimplemented freeProcessingLock');
   }
 
@@ -84,14 +92,6 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     console.log('getNextProcessingId');
 
     return 0;
-  }
-
-  public async getOrphanedQueries(): Promise<unknown> {
-    // throw new Error('Unimplemented getOrphanedQueries');
-
-    console.log('getOrphanedQueries');
-
-    return [];
   }
 
   public async getQueryStageState(onlyKeys: boolean): Promise<QueryStageStateResponse> {
@@ -111,12 +111,19 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     throw new Error(`Unimplemented getResultBlocking, queryKey: ${queryKey}`);
   }
 
-  public async getStalledQueries(): Promise<unknown> {
-    // throw new Error('Unimplemented getStalledQueries');
+  public async getStalledQueries(): Promise<string[]> {
+    const rows = await this.driver.query('select id from from system.queue WHERE created <= DATE_SUB(NOW(), interval \'1 minute\') AND status = ?', ['Pending']);
+    return rows.map((row) => row.id);
+  }
 
-    console.log('getStalledQueries');
-
+  public async getOrphanedQueries(): Promise<string[]> {
     return [];
+  }
+
+  public async getQueriesToCancel(): Promise<string[]> {
+    // TODO: It's better to introduce single command which cancel all orhaped & stalled queries and return it back
+    const rows = await this.driver.query('select id from system.queue WHERE created <= DATE_SUB(NOW(), interval \'1 minute\') AND status = ?', ['Pending']);
+    return rows.map((row) => row.id);
   }
 
   public async getQueryDef(queryKey: string): Promise<QueryDef> {
@@ -128,7 +135,7 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     throw new Error(`Unable to find query def for id: "${queryKey}"`);
   }
 
-  public async getToProcessQueries(): Promise<unknown> {
+  public async getToProcessQueries(): Promise<string[]> {
     const rows = await this.driver.query('select id from system.queue where status = ?', ['Pending']);
     return rows.map((row) => row.id);
   }
@@ -141,7 +148,7 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     // throw new Error('Unimplemented release');
   }
 
-  public async retrieveForProcessing(queryKey: string, processingId: string): Promise<unknown> {
+  public async retrieveForProcessing(queryKey: string, processingId: string): Promise<RetrieveForProcessingResponse> {
     throw new Error('Unimplemented retrieveForProcessing');
   }
 

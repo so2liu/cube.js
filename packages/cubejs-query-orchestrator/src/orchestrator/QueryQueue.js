@@ -271,11 +271,7 @@ export class QueryQueue {
   async reconcileQueueImpl() {
     const queueConnection = await this.queueDriver.createConnection();
     try {
-      const toCancel = (
-        await queueConnection.getStalledQueries()
-      ).concat(
-        await queueConnection.getOrphanedQueries()
-      );
+      const toCancel = await queueConnection.getQueriesToCancel();
 
       await Promise.all(toCancel.map(async queryKey => {
         const [query] = await queueConnection.getQueryAndRemove(queryKey);
@@ -294,8 +290,10 @@ export class QueryQueue {
         }
       }));
 
-      const active = await queueConnection.getActiveQueries();
-      const toProcess = await queueConnection.getToProcessQueries();
+      const [active, toProcess] = await Promise.all([
+        queueConnection.getActiveQueries(),
+        queueConnection.getToProcessQueries()
+      ]);
       await Promise.all(
         R.pipe(
           R.filter(p => active.indexOf(p) === -1),

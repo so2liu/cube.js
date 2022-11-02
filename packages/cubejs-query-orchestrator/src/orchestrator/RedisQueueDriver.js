@@ -1,8 +1,11 @@
 import R from 'ramda';
-import { QueueDriverInterface } from '@cubejs-backend/base-driver';
+import { QueueDriverInterface, LocalQueueDriverConnectionInterface } from '@cubejs-backend/base-driver';
 
 import { BaseQueueDriver } from './BaseQueueDriver';
 
+/**
+ * @implements {LocalQueueDriverConnectionInterface}
+ */
 export class RedisQueueDriverConnection {
   constructor(driver, options) {
     this.driver = driver;
@@ -31,6 +34,15 @@ export class RedisQueueDriverConnection {
     const resultListKey = this.resultListKey(queryKey);
     const result = await this.redisClient.rpopAsync(resultListKey);
     return result && JSON.parse(result);
+  }
+
+  async getQueriesToCancel() {
+    const [stalled, orphaned] = await Promise.all([
+      await this.getStalledQueries(),
+      await this.getOrphanedQueries(),
+    ]);
+
+    return stalled.concat(orphaned);
   }
 
   addToQueue(keyScore, queryKey, orphanedTime, queryHandler, query, priority, options) {

@@ -76,6 +76,9 @@ pub enum Statement {
         key: Ident,
         value: String,
     },
+    QueueCancel {
+        key: Ident,
+    },
     QueueTruncate {},
     System(SystemCommand),
     Dump(Box<Query>),
@@ -256,6 +259,9 @@ impl<'a> CubeStoreParser<'a> {
                     value: self.parser.parse_literal_string()?,
                 })
             }
+            "cancel" => Ok(Statement::QueueCancel {
+                key: self.parser.parse_identifier()?,
+            }),
             "truncate" => Ok(Statement::QueueTruncate {}),
             command => Err(ParserError::ParserError(format!(
                 "Unknown cache command: {}",

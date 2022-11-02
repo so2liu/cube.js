@@ -1252,6 +1252,7 @@ pub trait MetaStore: DIService + Send + Sync {
     async fn all_queue(&self) -> Result<Vec<IdRow<QueueItem>>, CubeError>;
     async fn queue_add(&self, item: QueueItem) -> Result<bool, CubeError>;
     async fn queue_truncate(&self) -> Result<(), CubeError>;
+    async fn queue_cancel(&self, key: String) -> Result<Option<IdRow<QueueItem>>, CubeError>;
 
     // Force compaction for specific column family
     async fn cf_compaction(&self, cf: ColumnFamilyName) -> Result<(), CubeError>;
@@ -4199,6 +4200,22 @@ impl MetaStore for RocksMetaStore {
         .await?;
 
         Ok(())
+    }
+
+    async fn queue_cancel(&self, key: String) -> Result<Option<IdRow<QueueItem>>, CubeError> {
+        self.write_operation_cache(move |db_ref, batch_pipe| {
+            let queue_schema = QueueItemRocksTable::new(db_ref.clone());
+            let index_key = QueueItemIndexKey::ByKey(key.clone());
+            let id_row_opt = queue_schema
+                .get_single_opt_row_by_index(&index_key, &QueueItemRocksIndex::ByKey)?;
+
+            if let Some(id_row) = id_row_opt {
+                Ok(Some(queue_schema.delete(id_row.get_id(), batch_pipe)?))
+            } else {
+                Ok(None)
+            }
+        })
+        .await
     }
 
     async fn cf_compaction(&self, cf_name: ColumnFamilyName) -> Result<(), CubeError> {

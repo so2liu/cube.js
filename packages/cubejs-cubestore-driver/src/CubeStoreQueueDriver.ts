@@ -177,7 +177,9 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 
   public async updateHeartBeat(queryKey: string): Promise<void> {
-    throw new Error('Unimplemented updateHeartBeat');
+    await this.driver.query('QUEUE HEARTBEAT ?', [
+      this.redisHash(queryKey)
+    ]);
   }
 }
 

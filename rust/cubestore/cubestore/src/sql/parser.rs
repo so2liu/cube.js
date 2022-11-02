@@ -82,6 +82,9 @@ pub enum Statement {
     QueueCancel {
         key: Ident,
     },
+    QueueHeartbeat {
+        key: Ident,
+    },
     QueueTruncate {},
     System(SystemCommand),
     Dump(Box<Query>),
@@ -266,6 +269,9 @@ impl<'a> CubeStoreParser<'a> {
                 })
             }
             "cancel" => Ok(Statement::QueueCancel {
+                key: self.parser.parse_identifier()?,
+            }),
+            "heartbeat" => Ok(Statement::QueueHeartbeat {
                 key: self.parser.parse_identifier()?,
             }),
             "truncate" => Ok(Statement::QueueTruncate {}),

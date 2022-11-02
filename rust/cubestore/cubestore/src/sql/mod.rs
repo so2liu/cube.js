@@ -1155,6 +1155,11 @@ impl SqlService for SqlServiceImpl {
                     Ok(Arc::new(DataFrame::new(vec![], vec![])))
                 }
             }
+            CubeStoreStatement::QueueHeartbeat { key } => {
+                self.db.queue_heartbeat(key.value).await?;
+
+                Ok(Arc::new(DataFrame::new(vec![], vec![])))
+            }
             CubeStoreStatement::Statement(Statement::Query(q)) => {
                 let logical_plan = self
                     .query_planner

@@ -43,6 +43,13 @@ impl QueueItem {
     pub fn status_default() -> QueueItemStatus {
         QueueItemStatus::Pending
     }
+
+    pub fn update_heartbeat(&self) -> Self {
+        let mut new = self.clone();
+        new.heartbeat = Some(Utc::now());
+
+        new
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -116,30 +116,19 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     return null;
   }
 
-  public async getResultBlocking(queryKey: string): Promise<QueryDef | null> {
-    const rows = await this.driver.query('QUEUE RESULT_BLOCKING ? ?', [
-      this.options.continueWaitTimeout * 1000,
-      this.redisHash(queryKey),
-    ]);
-    if (rows && rows.length) {
-      return JSON.parse(rows[0].value);
-    }
-
-    return null;
-  }
-
   public async getStalledQueries(): Promise<string[]> {
     const rows = await this.driver.query('select id from from system.queue WHERE created <= DATE_SUB(NOW(), interval \'1 minute\') AND status = ?', ['Pending']);
     return rows.map((row) => row.id);
   }
 
   public async getOrphanedQueries(): Promise<string[]> {
-    return [];
+    const rows = await this.driver.query('select id from from system.queue WHERE created <= DATE_SUB(NOW(), interval \'1 minute\') AND status = ?', ['Active']);
+    return rows.map((row) => row.id);
   }
 
   public async getQueriesToCancel(): Promise<string[]> {
     // TODO: It's better to introduce single command which cancel all orhaped & stalled queries and return it back
-    const rows = await this.driver.query('select id from system.queue WHERE created <= DATE_SUB(NOW(), interval \'1 minute\') AND status = ?', ['Pending']);
+    const rows = await this.driver.query('select id from system.queue WHERE (created <= DATE_SUB(NOW(), interval \'1 minute\') AND status = ?) OR (created <= DATE_SUB(NOW(), interval \'1 minute\') AND status = ?)', ['Pending', 'Active']);
     return rows.map((row) => row.id);
   }
 
@@ -172,21 +161,45 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
       this.redisHash(queryKey),
     ]);
     if (rows && rows.length) {
-      const added = 0;
-      const active = 0;
+      const addedCount = 1;
+      const active = [this.redisHash(queryKey)];
       const toProcess = 0;
-      const lockAcquired = false;
-      const def = rows[0].value;
+      const lockAcquired = true;
+      const def = JSON.parse(rows[0].value);
 
       return [
-        added, null, active, toProcess, def, lockAcquired
+        addedCount, null, active, toProcess, def, lockAcquired
       ];
     }
 
     return null;
   }
 
+  public async getResultBlocking(queryKey: string): Promise<QueryDef | null> {
+    const rows = await this.driver.query('QUEUE RESULT_BLOCKING ? ?', [
+      this.options.continueWaitTimeout * 1000,
+      this.redisHash(queryKey),
+    ]);
+    console.log('getResultBlocking', rows);
+    if (rows && rows.length) {
+      const result = await this.driver.query('CACHE GET ?', [
+        this.getKey('result', queryKey),
+      ]);
+      if (result && result.length) {
+        console.log('getResultBlocking result', JSON.parse(result[0].value));
+        return JSON.parse(result[0].value);
+      }
+    }
+
+    return null;
+  }
+
   public async setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<boolean> {
+    await this.driver.query('CACHE SET TTL 3600 ? ?', [
+      this.getKey('result', queryKey),
+      JSON.stringify(executionResult),
+    ]);
+
     await this.driver.query('QUEUE ACK ?', [
       this.redisHash(queryKey),
     ]);
@@ -195,6 +208,8 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 
   public async updateHeartBeat(queryKey: string): Promise<void> {
+    console.log('updateHeartBeat', this.redisHash(queryKey));
+
     await this.driver.query('QUEUE HEARTBEAT ?', [
       this.redisHash(queryKey)
     ]);

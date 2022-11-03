@@ -57,8 +57,7 @@ export class QueryQueue {
     this.skipQueue = options.skipQueue;
   }
 
-  async executeInQueue(queryHandler, queryKey, query, priority, options) {
-    options = options || {};
+  async executeInQueue(queryHandler, queryKey, query, priority, options = {}) {
     if (this.skipQueue) {
       const queryDef = {
         queryHandler,
@@ -272,6 +271,9 @@ export class QueryQueue {
     const queueConnection = await this.queueDriver.createConnection();
     try {
       const toCancel = await queueConnection.getQueriesToCancel();
+      console.log('reconcileQueueImpl', {
+        toCancel
+      });
 
       await Promise.all(toCancel.map(async queryKey => {
         const [query] = await queueConnection.getQueryAndRemove(queryKey);
@@ -294,10 +296,11 @@ export class QueryQueue {
         queueConnection.getActiveQueries(),
         queueConnection.getToProcessQueries()
       ]);
-      console.log('status', {
+      console.log('reconcileQueueImpl', {
         active,
         toProcess
       });
+
       await Promise.all(
         R.pipe(
           R.filter(p => active.indexOf(p) === -1),
@@ -431,6 +434,10 @@ export class QueryQueue {
     try {
       const processingId = await redisClient.getNextProcessingId();
       const retrieveResult = await redisClient.retrieveForProcessing(queryKey, processingId);
+      console.log('processQuery retrieveResult', {
+        retrieveResult
+      });
+
       if (retrieveResult) {
         [insertedCount, _removedCount, activeKeys, queueSize, query, processingLockAcquired] = retrieveResult;
       }
@@ -438,6 +445,10 @@ export class QueryQueue {
       if (!query) {
         query = await redisClient.getQueryDef(this.redisHash(queryKey));
       }
+
+      console.log('processQuery', {
+        query, insertedCount, activated, processingLockAcquired
+      });
       if (query && insertedCount && activated && processingLockAcquired) {
         let executionResult;
         const startQueryTime = (new Date()).getTime();

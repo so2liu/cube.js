@@ -1,6 +1,6 @@
 export type QueryStageStateResponse = any[];
 export type QueryDef = unknown;
-export type RetrieveForProcessingResponse = [added: any, removed: any, active: any, toProcess: any, def: QueryDef, lockAquired: boolean] | null;
+export type RetrieveForProcessingResponse = [added: any, removed: any, active: string[], toProcess: any, def: QueryDef, lockAquired: boolean] | null;
 export interface AddToQueueQuery {
   isJob: boolean,
   orphanedTimeout: unknown

@@ -38,6 +38,7 @@ impl Drop for MetaStoreCacheCompactionFilter {
     fn drop(&mut self) {
         let elapsed = Utc::now() - self.current;
 
+        #[cfg(debug_assertions)]
         println!(
             "Compaction finished in {}.{} secs (is_full: {}), scanned: {}, removed: {}, orphaned: {}",
             elapsed.num_seconds(),

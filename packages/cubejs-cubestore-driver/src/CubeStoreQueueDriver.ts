@@ -194,8 +194,9 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
       JSON.stringify(executionResult),
     ]);
 
-    await this.driver.query('QUEUE ACK ?', [
+    await this.driver.query('QUEUE ACK ? ? ', [
       this.redisHash(queryKey),
+      JSON.stringify(executionResult)
     ]);
 
     return true;

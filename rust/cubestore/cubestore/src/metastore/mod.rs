@@ -2263,8 +2263,28 @@ trait RocksTable: Debug + Send + Sync {
 
     fn delete(&self, row_id: u64, batch_pipe: &mut BatchPipe) -> Result<IdRow<Self::T>, CubeError> {
         let row = self.get_row_or_not_found(row_id)?;
-        let deleted_row = self.delete_row_indexes(row.get_row(), row_id)?;
-        batch_pipe.add_event(MetaStoreEvent::Delete(Self::table_id(), row_id));
+        self.delete_impl(row, batch_pipe)
+    }
+
+    fn try_delete(
+        &self,
+        row_id: u64,
+        batch_pipe: &mut BatchPipe,
+    ) -> Result<Option<IdRow<Self::T>>, CubeError> {
+        if let Some(row) = self.get_row(row_id)? {
+            Ok(Some(self.delete_impl(row, batch_pipe)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn delete_impl(
+        &self,
+        row: IdRow<Self::T>,
+        batch_pipe: &mut BatchPipe,
+    ) -> Result<IdRow<Self::T>, CubeError> {
+        let deleted_row = self.delete_row_indexes(row.get_row(), row.get_id())?;
+        batch_pipe.add_event(MetaStoreEvent::Delete(Self::table_id(), row.get_id()));
         batch_pipe.add_event(self.delete_event(row.clone()));
         for row in deleted_row {
             batch_pipe.batch().delete_cf(self.cf()?, row.key);
@@ -2272,7 +2292,7 @@ trait RocksTable: Debug + Send + Sync {
 
         batch_pipe
             .batch()
-            .delete_cf(self.cf()?, self.delete_row(row_id)?.key);
+            .delete_cf(self.cf()?, self.delete_row(row.get_id())?.key);
 
         Ok(row)
     }
@@ -4213,15 +4233,8 @@ impl MetaStore for RocksMetaStore {
     }
 
     async fn all_queue(&self) -> Result<Vec<IdRow<QueueItem>>, CubeError> {
-        self.read_operation_out_of_queue(move |db_ref| {
-            println!(
-                "rows {:?}",
-                QueueItemRocksTable::new(db_ref.clone()).all_rows()
-            );
-
-            Ok(QueueItemRocksTable::new(db_ref).all_rows()?)
-        })
-        .await
+        self.read_operation_cache(move |db_ref| Ok(QueueItemRocksTable::new(db_ref).all_rows()?))
+            .await
     }
 
     async fn queue_add(&self, item: QueueItem) -> Result<bool, CubeError> {
@@ -4351,15 +4364,13 @@ impl MetaStore for RocksMetaStore {
         if let Ok(res) = fut.await {
             match res {
                 Ok(Some(ack_result)) => {
-                    self.write_operation_cache(|db_ref, batch_pipe| {
+                    self.write_operation_cache(move |db_ref, batch_pipe| {
                         let queue_schema = QueueItemRocksTable::new(db_ref.clone());
-                        queue_schema.delete(ack_result.row_id, batch_pipe)?;
+                        queue_schema.try_delete(ack_result.row_id, batch_pipe)?;
 
-                        Ok(ack_result)
+                        Ok(Some(ack_result))
                     })
-                    .await?;
-
-                    Ok(None)
+                    .await
                 }
                 Ok(None) => Ok(None),
                 Err(e) => Err(e),

@@ -1,6 +1,21 @@
 export type QueryStageStateResponse = any[];
 export type QueryDef = unknown;
-export type RetrieveForProcessingResponse = [any, any, any, any, QueryDef, boolean];
+export type RetrieveForProcessingResponse = [added: any, removed: any, active: any, toProcess: any, def: QueryDef, lockAquired: boolean] | null;
+export interface AddToQueueQuery {
+  isJob: boolean,
+  orphanedTimeout: unknown
+}
+
+export interface AddToQueueOptions {
+  stageQueryKey: string,
+  requestId: string
+}
+
+export interface QueueDriverOptions {
+  redisQueuePrefix: string,
+  concurrency: number,
+  continueWaitTimeout: number,
+}
 
 export interface LocalQueueDriverConnectionInterface {
   getResultBlocking(queryKey: string): Promise<unknown>;
@@ -14,9 +29,9 @@ export interface LocalQueueDriverConnectionInterface {
   getQueryStageState(onlyKeys: boolean): Promise<QueryStageStateResponse>;
   updateHeartBeat(queryKey: string): Promise<void>;
   getNextProcessingId(): Promise<string | number>;
-  retrieveForProcessing(queryKey: string, processingId: number | string): Promise<unknown>;
-  freeProcessingLock(queryKe: string, processingId: string | number, activated: unknown): Promise<unknown>;
-  optimisticQueryUpdate(queryKey, toUpdate, processingId): Promise<unknown>;
+  retrieveForProcessing(queryKey: string, processingId: number | string): Promise<RetrieveForProcessingResponse>;
+  freeProcessingLock(queryKe: string, processingId: string | number, activated: unknown): Promise<void>;
+  optimisticQueryUpdate(queryKey, toUpdate, processingId): Promise<boolean>;
   cancelQuery(queryKey: string): Promise<[QueryDef]>;
   getQueryAndRemove(queryKey: string): Promise<[QueryDef]>;
   setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<unknown>;

@@ -1,32 +1,23 @@
 import {
   QueueDriverInterface,
   LocalQueueDriverConnectionInterface,
-  QueryStageStateResponse, QueryDef, RetrieveForProcessingResponse,
+  QueryStageStateResponse,
+  QueryDef,
+  RetrieveForProcessingResponse,
+  QueueDriverOptions,
+  AddToQueueQuery,
+  AddToQueueOptions,
 } from '@cubejs-backend/base-driver';
 
-import { CubeStoreDriver } from './CubeStoreDriver';
 import crypto from 'crypto';
-
-interface AddToQueueQuery {
-  isJob: boolean,
-  orphanedTimeout: unknown
-}
-
-interface AddToQueueOptions {
-  stageQueryKey: string,
-  requestId: string
-}
-
-interface QueueDriverOptions {
-  redisQueuePrefix: string,
-  concurrency: number,
-}
+import { CubeStoreDriver } from './CubeStoreDriver';
 
 class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterface {
   public constructor(
     protected readonly driver: CubeStoreDriver,
     protected readonly options: QueueDriverOptions,
   ) {
+    console.log(options);
   }
 
   protected getKey(suffix: string, queryKey?: string): string {
@@ -44,10 +35,6 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 
   public async addToQueue(keyScore: number, queryKey: string, orphanedTime: any, queryHandler: string, query: AddToQueueQuery, priority: number, options: AddToQueueOptions): Promise<unknown> {
-    console.log('addtoQueue ..', {
-      keyScore, queryKey, orphanedTime, queryHandler, query, priority, options
-    });
-
     // TODO: Fix sqlparser, support negative number
     priority = priority < 0 ? 0 : priority;
 
@@ -61,9 +48,11 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
       addedToQueueTime: new Date().getTime()
     };
 
-    console.log('addtoQueue data', data);
+    console.log('addToQueue ..', {
+      keyScore, queryKey, orphanedTime, queryHandler, query, priority, options, data
+    });
 
-    const rows = await this.driver.query(`QUEUE ADD PRIORITY ? ? ?`, [
+    const _rows = await this.driver.query(`QUEUE ADD PRIORITY ? ? ?`, [
       priority,
       this.redisHash(queryKey),
       JSON.stringify(data)
@@ -94,8 +83,8 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     throw new Error(`Unable to cancel query with id: "${queryKey}"`);
   }
 
-  public async freeProcessingLock(queryKey: string, processingId: string, activated: unknown): Promise<unknown> {
-    throw new Error('Unimplemented freeProcessingLock');
+  public async freeProcessingLock(queryKey: string, processingId: string, activated: unknown): Promise<void> {
+    // nothing to do
   }
 
   public async getActiveQueries(): Promise<unknown> {
@@ -127,8 +116,16 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     return null;
   }
 
-  public async getResultBlocking(queryKey: string): Promise<unknown> {
-    throw new Error(`Unimplemented getResultBlocking, queryKey: ${queryKey}`);
+  public async getResultBlocking(queryKey: string): Promise<QueryDef | null> {
+    const rows = await this.driver.query('QUEUE RESULT_BLOCKING ? ?', [
+      this.options.continueWaitTimeout * 1000,
+      this.redisHash(queryKey),
+    ]);
+    if (rows && rows.length) {
+      return JSON.parse(rows[0].value);
+    }
+
+    return null;
   }
 
   public async getStalledQueries(): Promise<string[]> {
@@ -152,7 +149,7 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
       return JSON.parse(rows[0].value);
     }
 
-    throw new Error(`Unable to find query def for id: "${queryKey}"`);
+    throw new Error(`Unable to find query def for id: "${this.redisHash(queryKey)}"`);
   }
 
   public async getToProcessQueries(): Promise<string[]> {
@@ -160,20 +157,41 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     return rows.map((row) => row.id);
   }
 
-  public async optimisticQueryUpdate(queryKey: any, toUpdate: any, processingId: any): Promise<unknown> {
-    throw new Error('Unimplemented optimisticQueryUpdate');
+  public async optimisticQueryUpdate(queryKey: any, toUpdate: any, processingId: any): Promise<boolean> {
+    //
+    return true;
   }
 
   public async release(): Promise<void> {
     // throw new Error('Unimplemented release');
   }
 
-  public async retrieveForProcessing(queryKey: string, processingId: string): Promise<RetrieveForProcessingResponse> {
-    throw new Error('Unimplemented retrieveForProcessing');
+  public async retrieveForProcessing(queryKey: string, _processingId: string): Promise<RetrieveForProcessingResponse> {
+    const rows = await this.driver.query('QUEUE RETRIEVE CONCURRENCY ? ?', [
+      this.options.concurrency,
+      this.redisHash(queryKey),
+    ]);
+    if (rows && rows.length) {
+      const added = 0;
+      const active = 0;
+      const toProcess = 0;
+      const lockAcquired = false;
+      const def = rows[0].value;
+
+      return [
+        added, null, active, toProcess, def, lockAcquired
+      ];
+    }
+
+    return null;
   }
 
-  public async setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<unknown> {
-    throw new Error('Unimplemented setResultAndRemoveQuery');
+  public async setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<boolean> {
+    await this.driver.query('QUEUE ACK ?', [
+      this.redisHash(queryKey),
+    ]);
+
+    return true;
   }
 
   public async updateHeartBeat(queryKey: string): Promise<void> {
@@ -188,6 +206,12 @@ export class CubeStoreQueueDriver implements QueueDriverInterface {
     protected readonly driver: CubeStoreDriver,
     protected readonly options: QueueDriverOptions
   ) {}
+
+  public redisHash(queryKey) {
+    return typeof queryKey === 'string' && queryKey.length < 256 ?
+      queryKey :
+      crypto.createHash('md5').update(JSON.stringify(queryKey)).digest('hex');
+  }
 
   public async createConnection(): Promise<CubestoreQueueDriverConnection> {
     return new CubestoreQueueDriverConnection(this.driver, this.options);

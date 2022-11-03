@@ -1258,6 +1258,7 @@ pub trait MetaStore: DIService + Send + Sync {
     async fn queue_cancel(&self, key: String) -> Result<Option<IdRow<QueueItem>>, CubeError>;
     async fn queue_heartbeat(&self, key: String) -> Result<(), CubeError>;
     async fn queue_retrieve(&self, key: String) -> Result<Option<IdRow<QueueItem>>, CubeError>;
+    async fn queue_ack(&self, key: String) -> Result<(), CubeError>;
     async fn queue_result(
         &self,
         key: String,
@@ -2709,13 +2710,11 @@ impl std::fmt::Display for ColumnFamilyName {
     }
 }
 
-pub struct RocksMetaStoreListener<'a> {
+pub struct RocksMetaStoreListener {
     receiver: Receiver<MetaStoreEvent>,
-    listener_id: usize,
-    metastore: &'a RocksMetaStore,
 }
 
-impl<'a> RocksMetaStoreListener<'a> {
+impl RocksMetaStoreListener {
     pub async fn wait_for_queue_update(
         mut self,
         key: String,
@@ -2731,12 +2730,6 @@ impl<'a> RocksMetaStoreListener<'a> {
         }
 
         Ok(None)
-    }
-}
-
-impl<'a> Drop for RocksMetaStoreListener<'a> {
-    fn drop(&mut self) {
-        self.metastore.remove_listener_sync(self.listener_id);
     }
 }
 
@@ -2920,27 +2913,22 @@ impl RocksMetaStore {
         Ok(())
     }
 
-    pub async fn add_listener(&self, listener: Sender<MetaStoreEvent>) -> usize {
+    pub async fn add_listener(&self, listener: Sender<MetaStoreEvent>) {
         let mut listeners = self.listeners.write().await;
-        listeners.push(listener);
-
-        listeners.len()
+        listeners.push(listener)
     }
 
-    pub fn remove_listener_sync(&self, index: usize) {
-        // let mut listeners = self.listeners.blocking_write();
-        // listeners.remove(index);
-    }
+    pub async fn get_metastore_listener(&self) -> RocksMetaStoreListener {
+        let listeners = self.listeners.read().await;
 
-    pub async fn get_temporarily_listener<'a>(&'a self) -> RocksMetaStoreListener<'a> {
-        let (event_sender, _) = broadcast::channel(10000); // TODO config
-
-        let listener_id = self.add_listener(event_sender.clone()).await;
+        let sender = if listeners.len() > 0 {
+            listeners.first().unwrap()
+        } else {
+            panic!("kek");
+        };
 
         RocksMetaStoreListener {
-            metastore: self,
-            listener_id,
-            receiver: event_sender.subscribe(),
+            receiver: sender.subscribe(),
         }
     }
 
@@ -4310,12 +4298,42 @@ impl MetaStore for RocksMetaStore {
         .await
     }
 
+    async fn queue_ack(&self, key: String) -> Result<(), CubeError> {
+        self.write_operation_cache(move |db_ref, batch_pipe| {
+            let queue_schema = QueueItemRocksTable::new(db_ref.clone());
+            let index_key = QueueItemIndexKey::ByKey(key.clone());
+            let id_row_opt = queue_schema
+                .get_single_opt_row_by_index(&index_key, &QueueItemRocksIndex::ByKey)?;
+
+            if let Some(id_row) = id_row_opt {
+                queue_schema.update_with_fn(
+                    id_row.id,
+                    |item| {
+                        let mut new = item.clone();
+                        new.status = QueueItemStatus::Finished;
+
+                        new
+                    },
+                    batch_pipe,
+                )?;
+
+                Ok(())
+            } else {
+                Err(CubeError::user(format!(
+                    "Unable ack queue, unknown id: {}",
+                    key
+                )))
+            }
+        })
+        .await
+    }
+
     async fn queue_result(
         &self,
         key: String,
         timeout: u64,
     ) -> Result<Option<IdRow<QueueItem>>, CubeError> {
-        let listener = self.get_temporarily_listener().await;
+        let listener = self.get_metastore_listener().await;
         match tokio::time::timeout(
             Duration::from_millis(timeout),
             listener.wait_for_queue_update(key, QueueItemStatus::Active),
@@ -4323,7 +4341,7 @@ impl MetaStore for RocksMetaStore {
         .await
         {
             Ok(res) => res,
-            Err(err) => Ok(None),
+            Err(_) => Ok(None),
         }
     }
 
@@ -4342,10 +4360,11 @@ impl MetaStore for RocksMetaStore {
                 )?;
                 Ok(())
             } else {
-                Err(CubeError::user(format!(
-                    "Unable to find queue with id: {}",
-                    key
-                )))
+                // Err(CubeError::user(format!(
+                //     "Unable to find queue with id: {}",
+                //     key
+                // )))
+                Ok(())
             }
         })
         .await

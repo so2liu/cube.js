@@ -294,6 +294,10 @@ export class QueryQueue {
         queueConnection.getActiveQueries(),
         queueConnection.getToProcessQueries()
       ]);
+      console.log('status', {
+        active,
+        toProcess
+      });
       await Promise.all(
         R.pipe(
           R.filter(p => active.indexOf(p) === -1),

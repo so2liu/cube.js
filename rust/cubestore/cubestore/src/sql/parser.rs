@@ -85,6 +85,9 @@ pub enum Statement {
     QueueHeartbeat {
         key: Ident,
     },
+    QueueAck {
+        key: Ident,
+    },
     QueueRetrieve {
         key: Ident,
         concurrency: u32,
@@ -282,6 +285,9 @@ impl<'a> CubeStoreParser<'a> {
             "heartbeat" => Ok(Statement::QueueHeartbeat {
                 key: self.parser.parse_identifier()?,
             }),
+            "ack" => Ok(Statement::QueueAck {
+                key: self.parser.parse_identifier()?,
+            }),
             "retrieve" => {
                 let concurrency = if self.parse_custom_token(&"concurrency") {
                     match self.parser.parse_number_value()? {
@@ -338,7 +344,7 @@ impl<'a> CubeStoreParser<'a> {
             }
             "truncate" => Ok(Statement::QueueTruncate {}),
             command => Err(ParserError::ParserError(format!(
-                "Unknown cache command: {}",
+                "Unknown queue command: {}",
                 command
             ))),
         }

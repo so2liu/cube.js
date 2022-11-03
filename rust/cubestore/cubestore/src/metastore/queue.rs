@@ -2,7 +2,7 @@ use super::{
     BaseRocksSecondaryIndex, ColumnFamilyName, IdRow, IndexId, MetaStoreEvent, QueueItem,
     QueueItemStatus, RocksSecondaryIndex, RocksTable, TableId,
 };
-use crate::{base_rocks_secondary_index, rocks_table_impl, CubeError};
+use crate::{base_rocks_secondary_index, rocks_table_impl};
 
 use chrono::{DateTime, Utc};
 use rocksdb::DB;

@@ -87,6 +87,7 @@ pub enum Statement {
     },
     QueueAck {
         key: Ident,
+        result: String,
     },
     QueueRetrieve {
         key: Ident,
@@ -287,6 +288,7 @@ impl<'a> CubeStoreParser<'a> {
             }),
             "ack" => Ok(Statement::QueueAck {
                 key: self.parser.parse_identifier()?,
+                result: self.parser.parse_literal_string()?,
             }),
             "retrieve" => {
                 let concurrency = if self.parse_custom_token(&"concurrency") {

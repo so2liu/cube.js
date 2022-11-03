@@ -182,13 +182,7 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
     ]);
     console.log('getResultBlocking', rows);
     if (rows && rows.length) {
-      const result = await this.driver.query('CACHE GET ?', [
-        this.getKey('result', queryKey),
-      ]);
-      if (result && result.length) {
-        console.log('getResultBlocking result', JSON.parse(result[0].value));
-        return JSON.parse(result[0].value);
-      }
+      return JSON.parse(rows[0].value);
     }
 
     return null;

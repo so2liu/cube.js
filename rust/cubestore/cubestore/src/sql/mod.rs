@@ -1160,12 +1160,15 @@ impl SqlService for SqlServiceImpl {
 
                 Ok(Arc::new(DataFrame::new(vec![], vec![])))
             }
-            CubeStoreStatement::QueueAck { key } => {
-                self.db.queue_ack(key.value).await?;
+            CubeStoreStatement::QueueAck { key, result } => {
+                self.db.queue_ack(key.value, result).await?;
 
                 Ok(Arc::new(DataFrame::new(vec![], vec![])))
             }
-            CubeStoreStatement::QueueRetrieve { key, concurrency } => {
+            CubeStoreStatement::QueueRetrieve {
+                key,
+                concurrency: _,
+            } => {
                 let row = self.db.queue_retrieve(key.value).await?;
                 if let Some(row) = row {
                     Ok(Arc::new(DataFrame::new(
@@ -1179,13 +1182,11 @@ impl SqlService for SqlServiceImpl {
                 }
             }
             CubeStoreStatement::QueueResult { timeout, key } => {
-                let row = self.db.queue_result(key.value, timeout).await?;
-                if let Some(row) = row {
+                let ack_result = self.db.queue_result(key.value, timeout).await?;
+                if let Some(ack_result) = ack_result {
                     Ok(Arc::new(DataFrame::new(
                         vec![Column::new("value".to_string(), ColumnType::String, 0)],
-                        vec![Row::new(vec![TableValue::String(
-                            row.get_row().get_value().clone(),
-                        )])],
+                        vec![Row::new(vec![TableValue::String(ack_result.result)])],
                     )))
                 } else {
                     Ok(Arc::new(DataFrame::new(vec![], vec![])))

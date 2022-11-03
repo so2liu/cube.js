@@ -20,7 +20,7 @@ export interface QueueDriverOptions {
 export interface LocalQueueDriverConnectionInterface {
   getResultBlocking(queryKey: string): Promise<unknown>;
   getResult(queryKey: string): Promise<any>;
-  addToQueue(keyScore: number, queryKey: string, orphanedTime: any, queryHandler: any, query: any, priority: any, options: any): Promise<unknown>;
+  addToQueue(keyScore: number, queryKey: string | [string, any[]], orphanedTime: any, queryHandler: any, query: any, priority: any, options: any): Promise<unknown>;
   getToProcessQueries(): Promise<unknown>;
   getActiveQueries(): Promise<unknown>;
   getQueryDef(queryKey: string): Promise<QueryDef>;

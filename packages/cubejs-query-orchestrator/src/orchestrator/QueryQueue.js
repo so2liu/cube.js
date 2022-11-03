@@ -58,6 +58,11 @@ export class QueryQueue {
   }
 
   async executeInQueue(queryHandler, queryKey, query, priority, options = {}) {
+    console.log('executeInQueue', {
+      queryHandler,
+      queryKey
+    });
+
     if (this.skipQueue) {
       const queryDef = {
         queryHandler,

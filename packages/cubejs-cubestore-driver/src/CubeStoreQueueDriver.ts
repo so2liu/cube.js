@@ -34,7 +34,7 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
       crypto.createHash('md5').update(JSON.stringify(queryKey)).digest('hex');
   }
 
-  public async addToQueue(keyScore: number, queryKey: string, orphanedTime: any, queryHandler: string, query: AddToQueueQuery, priority: number, options: AddToQueueOptions): Promise<unknown> {
+  public async addToQueue(keyScore: number, queryKey: string | [string, any[]], orphanedTime: any, queryHandler: string, query: AddToQueueQuery, priority: number, options: AddToQueueOptions): Promise<unknown> {
     // TODO: Fix sqlparser, support negative number
     priority = priority < 0 ? 0 : priority;
 
@@ -147,6 +147,12 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 
   public async optimisticQueryUpdate(queryKey: any, toUpdate: any, processingId: any): Promise<boolean> {
+    console.log('optimisticQueryUpdate', {
+      queryKey,
+      toUpdate,
+      processingId
+    });
+
     //
     return true;
   }
@@ -180,7 +186,11 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
       this.options.continueWaitTimeout * 1000,
       this.redisHash(queryKey),
     ]);
-    console.log('getResultBlocking', rows);
+    console.log('getResultBlocking', {
+      queryKey: this.redisHash(queryKey),
+      rows
+    });
+
     if (rows && rows.length) {
       return JSON.parse(rows[0].value);
     }
@@ -189,6 +199,11 @@ class CubestoreQueueDriverConnection implements LocalQueueDriverConnectionInterf
   }
 
   public async setResultAndRemoveQuery(queryKey: string, executionResult: any, processingId: any): Promise<boolean> {
+    console.log('setResultAndRemoveQuery', {
+      queryKey,
+      executionResult
+    });
+
     await this.driver.query('CACHE SET TTL 3600 ? ?', [
       this.getKey('result', queryKey),
       JSON.stringify(executionResult),

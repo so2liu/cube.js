@@ -2058,15 +2058,6 @@ trait RocksTable: Debug + Send + Sync {
             if let Some(row) = self.get_row(id)? {
                 res.push(row);
             } else {
-                if RocksSecondaryIndex::is_ttl(secondary_index) {
-                    trace!(
-                        "Row exists in secondary index (with TTL) however missing in {:?} table: {}. Compaction problem?",
-                        self, id
-                    );
-
-                    continue;
-                }
-
                 let index = self.get_index_by_id(BaseRocksSecondaryIndex::get_id(secondary_index));
                 self.rebuild_index(&index)?;
 

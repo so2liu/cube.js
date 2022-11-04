@@ -1204,7 +1204,7 @@ pub trait MetaStore: DIService + Send + Sync {
     async fn debug_dump(&self, out_path: String) -> Result<(), CubeError>;
 
     async fn all_cache(&self) -> Result<Vec<IdRow<CacheItem>>, CubeError>;
-    async fn cache_set(&self, item: CacheItem, nx: bool) -> Result<bool, CubeError>;
+    async fn cache_set(&self, item: CacheItem, updateIfNotExists: bool) -> Result<bool, CubeError>;
     async fn cache_truncate(&self) -> Result<(), CubeError>;
     async fn cache_delete(&self, key: String) -> Result<(), CubeError>;
     async fn cache_get(&self, key: String) -> Result<Option<IdRow<CacheItem>>, CubeError>;
@@ -4058,7 +4058,7 @@ impl MetaStore for RocksMetaStore {
         .await
     }
 
-    async fn cache_set(&self, item: CacheItem, nx: bool) -> Result<bool, CubeError> {
+    async fn cache_set(&self, item: CacheItem, updateIfNotExists: bool) -> Result<bool, CubeError> {
         self.write_operation_cache(move |db_ref, batch_pipe| {
             let cache_schema = CacheItemRocksTable::new(db_ref.clone());
             let index_key = CacheItemIndexKey::ByPath(item.get_path());
@@ -4066,7 +4066,7 @@ impl MetaStore for RocksMetaStore {
                 .get_single_opt_row_by_index(&index_key, &CacheItemRocksIndex::ByPath)?;
 
             if let Some(id_row) = id_row_opt {
-                if nx {
+                if updateIfNotExists {
                     return Ok(false);
                 };
 

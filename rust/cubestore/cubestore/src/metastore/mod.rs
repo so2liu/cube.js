@@ -50,6 +50,7 @@ use crate::CubeError;
 use arrow::datatypes::TimeUnit::Microsecond;
 use arrow::datatypes::{DataType, Field};
 use cache::{CacheItemRocksIndex, CacheItemRocksTable};
+use chrono::serde::ts_seconds_option;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use chunks::ChunkRocksTable;
 use core::{fmt, mem};
@@ -744,6 +745,7 @@ pub struct CacheItem {
     prefix: Option<String>,
     key: String,
     value: String,
+    #[serde(with = "ts_seconds_option")]
     expire: Option<DateTime<Utc>>
 }
 }

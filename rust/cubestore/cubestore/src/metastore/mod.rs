@@ -171,7 +171,7 @@ macro_rules! base_rocks_secondary_index {
 
 #[macro_export]
 macro_rules! rocks_table_impl {
-    ($table: ty, $rocks_table: ident, $table_id: expr, $indexes: block, $cfn: expr) => {
+    ($table: ty, $rocks_table: ident, $table_id: expr, $indexes: block, $column_family: expr) => {
         pub(crate) struct $rocks_table<'a> {
             db: crate::metastore::DbTableRef<'a>,
         }
@@ -186,7 +186,7 @@ macro_rules! rocks_table_impl {
             type T = $table;
 
             fn cf_name(&self) -> ColumnFamilyName {
-                $cfn
+                $column_family
             }
 
             fn db(&self) -> &DB {
